@@ -7,7 +7,7 @@ class RedisClient {
   async connect(): Promise<void> {
     try {
       this.client = createClient({
-        url: process.env.REDIS_URL || 'redis://localhost:6379',
+        url: process.env['REDIS_URL'] || 'redis://localhost:6379',
       });
 
       this.client.on('error', (err) => {

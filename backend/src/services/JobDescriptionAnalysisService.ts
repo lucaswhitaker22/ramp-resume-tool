@@ -133,28 +133,49 @@ export class JobDescriptionAnalysisService {
     const requiredSkills: string[] = [];
     const preferredSkills: string[] = [];
     
-    const sentences = content.toLowerCase().split(/[.!?]+/);
+    const lowerContent = content.toLowerCase();
+    const lines = lowerContent.split(/\n/);
     
-    for (const sentence of sentences) {
-      const isRequired = this.requirementIndicators.required.some(indicator => 
-        sentence.includes(indicator)
-      );
-      const isPreferred = this.requirementIndicators.preferred.some(indicator => 
-        sentence.includes(indicator)
-      );
+    let currentSection: 'required' | 'preferred' | 'none' = 'none';
+    
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (trimmedLine.length === 0) continue;
 
-      // Find skills in the sentence
-      const foundSkills = Array.from(this.skillKeywords).filter(skill => 
-        sentence.includes(skill)
-      );
+      // Check for section headers (only at the beginning of lines, not in bullet points)
+      if (/^required\s*(skills|qualifications)|^essential|^mandatory/.test(trimmedLine)) {
+        currentSection = 'required';
+        continue;
+      } else if (/^preferred\s*(skills|qualifications)|^nice\s*to\s*have|^bonus|^plus|^ideal|^desirable/.test(trimmedLine)) {
+        currentSection = 'preferred';
+        continue;
+      }
 
-      if (isRequired && !isPreferred) {
-        requiredSkills.push(...foundSkills);
-      } else if (isPreferred) {
-        preferredSkills.push(...foundSkills);
-      } else {
-        // Default to required if no clear indicator
-        requiredSkills.push(...foundSkills);
+      // Find skills in the line - use simple includes for better matching
+      const foundSkills = Array.from(this.skillKeywords).filter(skill => {
+        if (skill.length < 3) return false; // Skip very short skills
+        
+        // Simple case-insensitive matching
+        return trimmedLine.includes(skill.toLowerCase());
+      });
+
+      if (foundSkills.length > 0) {
+        // Check for inline indicators
+        const hasRequiredIndicator = this.requirementIndicators.required.some(indicator => 
+          trimmedLine.includes(indicator)
+        );
+        const hasPreferredIndicator = this.requirementIndicators.preferred.some(indicator => 
+          trimmedLine.includes(indicator)
+        );
+
+        if (hasPreferredIndicator || currentSection === 'preferred') {
+          preferredSkills.push(...foundSkills);
+        } else if (hasRequiredIndicator || currentSection === 'required') {
+          requiredSkills.push(...foundSkills);
+        } else {
+          // Default to required if no clear section context
+          requiredSkills.push(...foundSkills);
+        }
       }
     }
 
@@ -170,18 +191,44 @@ export class JobDescriptionAnalysisService {
   private extractExperienceLevel(content: string): string {
     const lowerContent = content.toLowerCase();
     
-    // Look for explicit year mentions
-    const yearMatches = lowerContent.match(/(\d+)\+?\s*years?\s*(of\s*)?(experience|exp)/g);
-    if (yearMatches) {
-      const years = parseInt(yearMatches[0].match(/\d+/)?.[0] || '0');
-      if (years <= 2) return 'entry-level';
-      if (years <= 5) return 'mid-level';
-      return 'senior-level';
+    // Look for explicit year mentions with various patterns
+    const yearPatterns = [
+      /(\d+)\s*-\s*(\d+)\s*years?\s*(of\s*)?(experience|exp)/g,
+      /(\d+)\+?\s*years?\s*(of\s*)?(experience|exp)/g,
+      /(\d+)\+\s*years/g,
+      /experience:\s*(\d+)\s*-\s*(\d+)\s*years/g
+    ];
+
+    for (const pattern of yearPatterns) {
+      const matches = Array.from(lowerContent.matchAll(pattern));
+      if (matches.length > 0) {
+        const match = matches[0];
+        if (!match) continue;
+        
+        let years = 0;
+        
+        if (match[2] && match[1] && !isNaN(parseInt(match[2])) && !isNaN(parseInt(match[1]))) {
+          // Range pattern (e.g., "3-5 years") - use the average for classification
+          const min = parseInt(match[1]);
+          const max = parseInt(match[2]);
+          years = Math.floor((min + max) / 2);
+        } else if (match[1] && !isNaN(parseInt(match[1]))) {
+          // Single number pattern (e.g., "5+ years")
+          years = parseInt(match[1]);
+        }
+        
+        if (years > 0) {
+          if (years <= 2) return 'entry-level';
+          if (years < 5) return 'mid-level';
+          return 'senior-level';
+        }
+      }
     }
 
-    // Look for level keywords
+    // Look for level keywords with word boundaries
     for (const [keyword, level] of this.experienceLevels) {
-      if (lowerContent.includes(keyword)) {
+      const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+      if (regex.test(lowerContent)) {
         return level;
       }
     }
@@ -239,11 +286,29 @@ export class JobDescriptionAnalysisService {
     const organizations = doc.organizations().out('array');
     keywords.push(...organizations);
     
+    // Extract individual words from compound phrases
+    const allWords = doc.out('array');
+    for (const word of allWords) {
+      if (typeof word === 'string' && word.length > 3) {
+        // Split compound words and phrases
+        const individualWords = word.split(/[\s\-_\.]+/).filter(w => w.length > 2);
+        keywords.push(...individualWords);
+      }
+    }
+    
     // Remove duplicates and filter out common words
-    const commonWords = new Set(['the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by']);
+    const commonWords = new Set([
+      'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
+      'are', 'is', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had',
+      'will', 'would', 'could', 'should', 'may', 'might', 'can', 'must',
+      'this', 'that', 'these', 'those', 'our', 'your', 'their', 'we', 'you', 'they'
+    ]);
+    
     const uniqueKeywords = [...new Set(keywords)]
+      .filter(keyword => typeof keyword === 'string')
       .filter(keyword => !commonWords.has(keyword.toLowerCase()))
       .filter(keyword => keyword.length > 2)
+      .filter(keyword => /^[a-zA-Z]/.test(keyword)) // Start with letter
       .slice(0, 50); // Limit to top 50 keywords
     
     return uniqueKeywords;
@@ -311,12 +376,14 @@ export class JobDescriptionAnalysisService {
     // Extract salary information
     const salaryPatterns = [
       /\$(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*-\s*\$(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/g,
-      /(\d{1,3}(?:,\d{3})*)\s*-\s*(\d{1,3}(?:,\d{3})*)\s*(?:usd|dollars?)/g
+      /salary:\s*\$?(\d{1,6}(?:,\d{3})*)\s*-\s*\$?(\d{1,6}(?:,\d{3})*)/gi,
+      /compensation:\s*\$?(\d{1,6}(?:,\d{3})*)\s*-\s*\$?(\d{1,6}(?:,\d{3})*)/gi,
+      /(\d{1,6}(?:,\d{3})*)\s*-\s*(\d{1,6}(?:,\d{3})*)\s*(?:usd|dollars?)/gi
     ];
 
     for (const pattern of salaryPatterns) {
       const match = pattern.exec(lowerContent);
-      if (match) {
+      if (match && match[1] && match[2]) {
         const min = parseInt(match[1].replace(/[,$]/g, ''));
         const max = parseInt(match[2].replace(/[,$]/g, ''));
         salaryRange = { min, max };
@@ -339,10 +406,21 @@ export class JobDescriptionAnalysisService {
       }
     }
 
-    return {
-      salaryRange,
-      currency,
+    const result: {
+      salaryRange?: { min?: number; max?: number };
+      currency?: string;
+      benefits: string[];
+    } = {
       benefits: [...new Set(benefits)]
     };
+
+    if (salaryRange) {
+      result.salaryRange = salaryRange;
+    }
+    if (currency) {
+      result.currency = currency;
+    }
+
+    return result;
   }
 }
