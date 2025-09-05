@@ -126,14 +126,17 @@
 
 
 
-  - [ ] 5.1 Scoring Engine Implementation
+  - [x] 5.1 Scoring Engine Implementation
+
+
     - Create overall compatibility scoring algorithm (0-100 scale)
     - Implement category-based scoring (Content, Structure, Keywords, etc.)
     - Build weighted scoring system based on job description match
     - Add score explanation and breakdown functionality
     - _Requirements: 5.1, 5.4_
 
-  - [ ] 5.2 Recommendation Engine
+  - [-] 5.2 Recommendation Engine
+
     - Implement priority-based recommendation categorization
     - Create specific, actionable improvement suggestions
     - Build before/after examples for recommendations
