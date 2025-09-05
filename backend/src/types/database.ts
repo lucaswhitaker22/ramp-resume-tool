@@ -26,6 +26,8 @@ export interface AnalysisResultEntity {
   recommendations: string | null; // JSON string
   strengths: string | null; // JSON string
   improvement_areas: string | null; // JSON string
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  error: string | null;
   analyzed_at: string;
 }
 
@@ -115,5 +117,7 @@ export interface AnalysisResult {
   recommendations: Recommendation[];
   strengths: string[];
   improvementAreas: string[];
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  error?: string;
   analyzedAt: Date;
 }

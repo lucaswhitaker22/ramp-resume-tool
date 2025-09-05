@@ -18,6 +18,7 @@ export class AnalysisResultModel extends BaseModel<AnalysisResultEntity> {
     recommendations: Recommendation[];
     strengths: string[];
     improvementAreas: string[];
+    status?: 'pending' | 'processing' | 'completed' | 'failed';
   }): Promise<string> {
     const analysisData: Omit<AnalysisResultEntity, 'id'> = {
       resume_id: data.resumeId,
@@ -27,10 +28,52 @@ export class AnalysisResultModel extends BaseModel<AnalysisResultEntity> {
       recommendations: JSON.stringify(data.recommendations),
       strengths: JSON.stringify(data.strengths),
       improvement_areas: JSON.stringify(data.improvementAreas),
+      status: data.status || 'pending',
+      error: null,
       analyzed_at: new Date().toISOString(),
     };
 
     return await this.create(analysisData);
+  }
+
+  /**
+   * Update analysis status
+   */
+  async updateStatus(id: string, status: 'pending' | 'processing' | 'completed' | 'failed', error?: string): Promise<void> {
+    const updateData: Partial<AnalysisResultEntity> = {
+      status,
+    };
+
+    if (error) {
+      updateData.error = error;
+    }
+
+    if (status === 'completed' || status === 'failed') {
+      updateData.analyzed_at = new Date().toISOString();
+    }
+
+    await this.updateById(id, updateData);
+  }
+
+  /**
+   * Update analysis results
+   */
+  async updateResults(id: string, data: {
+    overallScore: number;
+    categoryScores: CategoryScores;
+    recommendations: Recommendation[];
+    strengths: string[];
+    improvementAreas: string[];
+  }): Promise<void> {
+    await this.updateById(id, {
+      overall_score: data.overallScore,
+      category_scores: JSON.stringify(data.categoryScores),
+      recommendations: JSON.stringify(data.recommendations),
+      strengths: JSON.stringify(data.strengths),
+      improvement_areas: JSON.stringify(data.improvementAreas),
+      status: 'completed',
+      analyzed_at: new Date().toISOString(),
+    });
   }
 
   /**
@@ -243,11 +286,16 @@ export class AnalysisResultModel extends BaseModel<AnalysisResultEntity> {
       recommendations,
       strengths,
       improvementAreas,
+      status: entity.status,
       analyzedAt: new Date(entity.analyzed_at),
     };
 
     if (entity.job_description_id) {
       result.jobDescriptionId = entity.job_description_id;
+    }
+
+    if (entity.error) {
+      result.error = entity.error;
     }
 
     return result;
