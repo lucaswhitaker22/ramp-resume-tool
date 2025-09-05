@@ -44,7 +44,7 @@ export interface WorkExperience {
   company: string;
   position: string;
   startDate: string;
-  endDate?: string;
+  endDate?: string | undefined;
   description: string;
   achievements: string[];
 }
@@ -53,22 +53,22 @@ export interface Education {
   institution: string;
   degree: string;
   field: string;
-  graduationDate?: string;
-  gpa?: string;
+  graduationDate?: string | undefined;
+  gpa?: string | undefined;
 }
 
 export interface Certification {
   name: string;
   issuer: string;
-  date?: string;
-  expirationDate?: string;
+  date?: string | undefined;
+  expirationDate?: string | undefined;
 }
 
 export interface ResumeContent {
   rawText: string;
   sections: {
     contactInfo: ContactInfo;
-    summary?: string;
+    summary?: string | undefined;
     experience: WorkExperience[];
     education: Education[];
     skills: string[];
