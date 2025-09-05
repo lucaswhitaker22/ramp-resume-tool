@@ -1,6 +1,8 @@
 import nlp from 'compromise';
 import Sentiment from 'sentiment';
 import { ResumeContent, JobRequirements } from '@/types/database';
+import { ATSCompatibilityService, ATSCompatibilityResult } from './ATSCompatibilityService';
+import { ParsedResumeSection } from './ResumeParsingService';
 
 /**
  * Service for analyzing resume content quality and effectiveness
@@ -14,9 +16,11 @@ export class ResumeContentAnalysisService {
     positive: string[];
     negative: string[];
   };
+  private readonly atsCompatibilityService: ATSCompatibilityService;
 
   constructor() {
     this.sentiment = new Sentiment();
+    this.atsCompatibilityService = new ATSCompatibilityService();
 
     // Strong action verbs that show impact and leadership
     this.strongActionVerbs = new Set([
@@ -59,12 +63,17 @@ export class ResumeContentAnalysisService {
   /**
    * Analyze resume content for overall quality and effectiveness
    */
-  async analyzeResumeContent(resumeContent: ResumeContent, jobRequirements?: JobRequirements): Promise<{
+  async analyzeResumeContent(
+    resumeContent: ResumeContent, 
+    sections: ParsedResumeSection[], 
+    jobRequirements?: JobRequirements
+  ): Promise<{
     overallScore: number;
     actionVerbAnalysis: ActionVerbAnalysis;
     quantifiableAchievements: QuantifiableAchievementAnalysis;
     keywordMatching: KeywordMatchingAnalysis;
     clarityAndImpact: ClarityAndImpactAnalysis;
+    atsCompatibility: ATSCompatibilityResult;
     recommendations: ContentRecommendation[];
   }> {
     const actionVerbAnalysis = this.analyzeActionVerbs(resumeContent);
@@ -73,19 +82,22 @@ export class ResumeContentAnalysisService {
       ? this.analyzeKeywordMatching(resumeContent, jobRequirements)
       : this.getDefaultKeywordAnalysis();
     const clarityAndImpact = this.analyzeClarityAndImpact(resumeContent);
+    const atsCompatibility = this.atsCompatibilityService.analyzeATSCompatibility(resumeContent, sections);
 
     const overallScore = this.calculateOverallContentScore(
       actionVerbAnalysis,
       quantifiableAchievements,
       keywordMatching,
-      clarityAndImpact
+      clarityAndImpact,
+      atsCompatibility
     );
 
     const recommendations = this.generateContentRecommendations(
       actionVerbAnalysis,
       quantifiableAchievements,
       keywordMatching,
-      clarityAndImpact
+      clarityAndImpact,
+      atsCompatibility
     );
 
     return {
@@ -94,6 +106,7 @@ export class ResumeContentAnalysisService {
       quantifiableAchievements,
       keywordMatching,
       clarityAndImpact,
+      atsCompatibility,
       recommendations
     };
   }
@@ -397,20 +410,23 @@ export class ResumeContentAnalysisService {
     actionVerbs: ActionVerbAnalysis,
     quantifiable: QuantifiableAchievementAnalysis,
     keywords: KeywordMatchingAnalysis,
-    clarity: ClarityAndImpactAnalysis
+    clarity: ClarityAndImpactAnalysis,
+    atsCompatibility: ATSCompatibilityResult
   ): number {
     const weights = {
-      actionVerbs: 0.25,
-      quantifiable: 0.25,
-      keywords: 0.25,
-      clarity: 0.25
+      actionVerbs: 0.2,
+      quantifiable: 0.2,
+      keywords: 0.2,
+      clarity: 0.2,
+      atsCompatibility: 0.2
     };
 
     return Math.round(
       actionVerbs.score * weights.actionVerbs +
       quantifiable.score * weights.quantifiable +
       keywords.score * weights.keywords +
-      clarity.score * weights.clarity
+      clarity.score * weights.clarity +
+      atsCompatibility.overallScore * weights.atsCompatibility
     );
   }
 
@@ -514,7 +530,8 @@ export class ResumeContentAnalysisService {
     actionVerbs: ActionVerbAnalysis,
     quantifiable: QuantifiableAchievementAnalysis,
     keywords: KeywordMatchingAnalysis,
-    clarity: ClarityAndImpactAnalysis
+    clarity: ClarityAndImpactAnalysis,
+    atsCompatibility: ATSCompatibilityResult
   ): ContentRecommendation[] {
     const recommendations: ContentRecommendation[] = [];
 
@@ -559,6 +576,21 @@ export class ResumeContentAnalysisService {
         title: 'Improve Content Clarity',
         description: 'Make your achievements more specific and impactful',
         examples: clarity.readabilityIssues.slice(0, 2)
+      });
+    }
+
+    // ATS Compatibility recommendations
+    if (atsCompatibility.overallScore < 80) {
+      const priorityATSRecommendations = this.atsCompatibilityService.getPriorityRecommendations(atsCompatibility.recommendations);
+      
+      priorityATSRecommendations.forEach(atsRec => {
+        recommendations.push({
+          category: 'ats-compatibility',
+          priority: atsRec.priority,
+          title: atsRec.title,
+          description: atsRec.description,
+          examples: atsRec.example ? [atsRec.example] : []
+        });
       });
     }
 
@@ -613,7 +645,7 @@ export interface ClarityAndImpactAnalysis {
 }
 
 export interface ContentRecommendation {
-  category: 'action-verbs' | 'quantification' | 'keywords' | 'clarity';
+  category: 'action-verbs' | 'quantification' | 'keywords' | 'clarity' | 'ats-compatibility';
   priority: 'high' | 'medium' | 'low';
   title: string;
   description: string;

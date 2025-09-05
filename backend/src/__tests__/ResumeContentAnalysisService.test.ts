@@ -1,5 +1,6 @@
 import { ResumeContentAnalysisService } from '../services/ResumeContentAnalysisService';
 import { ResumeContent, JobRequirements } from '@/types/database';
+import { ParsedResumeSection } from '../services/ResumeParsingService';
 
 describe('ResumeContentAnalysisService', () => {
   let service: ResumeContentAnalysisService;
@@ -7,6 +8,14 @@ describe('ResumeContentAnalysisService', () => {
   beforeEach(() => {
     service = new ResumeContentAnalysisService();
   });
+
+  const mockSections: ParsedResumeSection[] = [
+    { sectionType: 'contact', content: 'John Doe\njohn@example.com', startIndex: 0, endIndex: 50 },
+    { sectionType: 'summary', content: 'SUMMARY\nExperienced software engineer', startIndex: 51, endIndex: 100 },
+    { sectionType: 'experience', content: 'EXPERIENCE\nSenior Developer', startIndex: 101, endIndex: 200 },
+    { sectionType: 'education', content: 'EDUCATION\nBachelor of Science', startIndex: 201, endIndex: 250 },
+    { sectionType: 'skills', content: 'SKILLS\nJavaScript, React', startIndex: 251, endIndex: 300 }
+  ];
 
   const mockResumeContent: ResumeContent = {
     rawText: 'Sample resume text',
@@ -66,13 +75,14 @@ describe('ResumeContentAnalysisService', () => {
 
   describe('analyzeResumeContent', () => {
     it('should analyze resume content and return comprehensive analysis', async () => {
-      const result = await service.analyzeResumeContent(mockResumeContent, mockJobRequirements);
+      const result = await service.analyzeResumeContent(mockResumeContent, mockSections, mockJobRequirements);
 
       expect(result).toHaveProperty('overallScore');
       expect(result).toHaveProperty('actionVerbAnalysis');
       expect(result).toHaveProperty('quantifiableAchievements');
       expect(result).toHaveProperty('keywordMatching');
       expect(result).toHaveProperty('clarityAndImpact');
+      expect(result).toHaveProperty('atsCompatibility');
       expect(result).toHaveProperty('recommendations');
 
       expect(typeof result.overallScore).toBe('number');
@@ -81,11 +91,24 @@ describe('ResumeContentAnalysisService', () => {
     });
 
     it('should work without job requirements', async () => {
-      const result = await service.analyzeResumeContent(mockResumeContent);
+      const result = await service.analyzeResumeContent(mockResumeContent, mockSections);
 
       expect(result).toHaveProperty('keywordMatching');
       expect(result.keywordMatching.score).toBe(0);
       expect(result.keywordMatching.totalJobKeywords).toBe(0);
+    });
+    it('should include ATS compatibility analysis', async () => {
+      const result = await service.analyzeResumeContent(mockResumeContent, mockSections, mockJobRequirements);
+
+      expect(result.atsCompatibility).toHaveProperty('overallScore');
+      expect(result.atsCompatibility).toHaveProperty('formattingScore');
+      expect(result.atsCompatibility).toHaveProperty('sectionOrganizationScore');
+      expect(result.atsCompatibility).toHaveProperty('readabilityScore');
+      expect(result.atsCompatibility).toHaveProperty('professionalPresentationScore');
+      expect(result.atsCompatibility).toHaveProperty('issues');
+      expect(result.atsCompatibility).toHaveProperty('recommendations');
+      expect(Array.isArray(result.atsCompatibility.issues)).toBe(true);
+      expect(Array.isArray(result.atsCompatibility.recommendations)).toBe(true);
     });
   });
 
@@ -112,7 +135,7 @@ describe('ResumeContentAnalysisService', () => {
         }
       };
 
-      const result = await service.analyzeResumeContent(strongVerbResume);
+      const result = await service.analyzeResumeContent(strongVerbResume, mockSections);
 
       expect(result.actionVerbAnalysis.strongVerbs.length).toBeGreaterThan(0);
       expect(result.actionVerbAnalysis.score).toBeGreaterThan(50);
@@ -140,7 +163,7 @@ describe('ResumeContentAnalysisService', () => {
         }
       };
 
-      const result = await service.analyzeResumeContent(weakVerbResume);
+      const result = await service.analyzeResumeContent(weakVerbResume, mockSections);
 
       expect(result.actionVerbAnalysis.weakVerbs.length).toBeGreaterThan(0);
       expect(result.actionVerbAnalysis.suggestions.length).toBeGreaterThan(0);
@@ -152,7 +175,7 @@ describe('ResumeContentAnalysisService', () => {
 
   describe('quantifiable achievements analysis', () => {
     it('should identify quantifiable achievements', async () => {
-      const result = await service.analyzeResumeContent(mockResumeContent);
+      const result = await service.analyzeResumeContent(mockResumeContent, mockSections);
 
       expect(result.quantifiableAchievements.quantifiedAchievements.length).toBeGreaterThan(0);
       expect(result.quantifiableAchievements.score).toBeGreaterThan(0);
@@ -166,7 +189,7 @@ describe('ResumeContentAnalysisService', () => {
     });
 
     it('should identify missing quantification opportunities', async () => {
-      const result = await service.analyzeResumeContent(mockResumeContent);
+      const result = await service.analyzeResumeContent(mockResumeContent, mockSections);
 
       expect(result.quantifiableAchievements.missingQuantification).toContain('StartupCo - Junior Developer');
       expect(result.quantifiableAchievements.suggestions.length).toBeGreaterThan(0);
@@ -190,7 +213,7 @@ describe('ResumeContentAnalysisService', () => {
         }
       };
 
-      const result = await service.analyzeResumeContent(noQuantificationResume);
+      const result = await service.analyzeResumeContent(noQuantificationResume, mockSections);
 
       expect(result.quantifiableAchievements.quantifiedAchievements.length).toBe(0);
       expect(result.quantifiableAchievements.missingQuantification.length).toBeGreaterThan(0);
@@ -199,7 +222,7 @@ describe('ResumeContentAnalysisService', () => {
 
   describe('keyword matching analysis', () => {
     it('should match keywords from job requirements', async () => {
-      const result = await service.analyzeResumeContent(mockResumeContent, mockJobRequirements);
+      const result = await service.analyzeResumeContent(mockResumeContent, mockSections, mockJobRequirements);
 
       expect(result.keywordMatching.matchedKeywords).toContain('JavaScript');
       expect(result.keywordMatching.matchedKeywords).toContain('React');
@@ -214,7 +237,7 @@ describe('ResumeContentAnalysisService', () => {
     });
 
     it('should calculate correct match percentage', async () => {
-      const result = await service.analyzeResumeContent(mockResumeContent, mockJobRequirements);
+      const result = await service.analyzeResumeContent(mockResumeContent, mockSections, mockJobRequirements);
 
       const expectedPercentage = Math.round(
         (result.keywordMatching.matchedKeywords.length / result.keywordMatching.totalJobKeywords) * 100
@@ -226,7 +249,7 @@ describe('ResumeContentAnalysisService', () => {
 
   describe('clarity and impact analysis', () => {
     it('should analyze content clarity and impact', async () => {
-      const result = await service.analyzeResumeContent(mockResumeContent);
+      const result = await service.analyzeResumeContent(mockResumeContent, mockSections);
 
       expect(result.clarityAndImpact).toHaveProperty('score');
       expect(result.clarityAndImpact).toHaveProperty('clarityScore');
@@ -242,7 +265,7 @@ describe('ResumeContentAnalysisService', () => {
     });
 
     it('should identify impact indicators', async () => {
-      const result = await service.analyzeResumeContent(mockResumeContent);
+      const result = await service.analyzeResumeContent(mockResumeContent, mockSections);
 
       expect(result.clarityAndImpact.impactIndicators).toContain('increased');
       expect(result.clarityAndImpact.impactIndicators).toContain('reduced');
@@ -257,7 +280,7 @@ describe('ResumeContentAnalysisService', () => {
         }
       };
 
-      const result = await service.analyzeResumeContent(longSentenceResume);
+      const result = await service.analyzeResumeContent(longSentenceResume, mockSections);
 
       expect(result.clarityAndImpact.readabilityIssues.some(issue => 
         issue.includes('too long')
@@ -267,7 +290,7 @@ describe('ResumeContentAnalysisService', () => {
 
   describe('recommendations generation', () => {
     it('should generate appropriate recommendations based on analysis', async () => {
-      const result = await service.analyzeResumeContent(mockResumeContent, mockJobRequirements);
+      const result = await service.analyzeResumeContent(mockResumeContent, mockSections, mockJobRequirements);
 
       expect(Array.isArray(result.recommendations)).toBe(true);
       
@@ -301,7 +324,7 @@ describe('ResumeContentAnalysisService', () => {
         }
       };
 
-      const result = await service.analyzeResumeContent(poorResume, mockJobRequirements);
+      const result = await service.analyzeResumeContent(poorResume, mockSections, mockJobRequirements);
 
       const highPriorityRecommendations = result.recommendations.filter(r => r.priority === 'high');
       expect(highPriorityRecommendations.length).toBeGreaterThan(0);
@@ -321,7 +344,7 @@ describe('ResumeContentAnalysisService', () => {
         }
       };
 
-      const result = await service.analyzeResumeContent(emptyResume);
+      const result = await service.analyzeResumeContent(emptyResume, []);
 
       expect(result.overallScore).toBeGreaterThanOrEqual(0);
       expect(result.actionVerbAnalysis.totalVerbs).toBe(0);
@@ -341,7 +364,7 @@ describe('ResumeContentAnalysisService', () => {
         }
       };
 
-      const result = await service.analyzeResumeContent(summaryOnlyResume);
+      const result = await service.analyzeResumeContent(summaryOnlyResume, mockSections);
 
       expect(result.overallScore).toBeGreaterThanOrEqual(0);
       expect(result.clarityAndImpact.wordCount).toBeGreaterThan(0);
@@ -350,7 +373,7 @@ describe('ResumeContentAnalysisService', () => {
 
   describe('scoring calculations', () => {
     it('should return scores within valid range (0-100)', async () => {
-      const result = await service.analyzeResumeContent(mockResumeContent, mockJobRequirements);
+      const result = await service.analyzeResumeContent(mockResumeContent, mockSections, mockJobRequirements);
 
       expect(result.overallScore).toBeGreaterThanOrEqual(0);
       expect(result.overallScore).toBeLessThanOrEqual(100);
@@ -365,13 +388,14 @@ describe('ResumeContentAnalysisService', () => {
     });
 
     it('should calculate overall score as weighted average', async () => {
-      const result = await service.analyzeResumeContent(mockResumeContent, mockJobRequirements);
+      const result = await service.analyzeResumeContent(mockResumeContent, mockSections, mockJobRequirements);
 
       const expectedScore = Math.round(
-        (result.actionVerbAnalysis.score * 0.25) +
-        (result.quantifiableAchievements.score * 0.25) +
-        (result.keywordMatching.score * 0.25) +
-        (result.clarityAndImpact.score * 0.25)
+        (result.actionVerbAnalysis.score * 0.2) +
+        (result.quantifiableAchievements.score * 0.2) +
+        (result.keywordMatching.score * 0.2) +
+        (result.clarityAndImpact.score * 0.2) +
+        (result.atsCompatibility.overallScore * 0.2)
       );
 
       expect(result.overallScore).toBe(expectedScore);
