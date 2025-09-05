@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { upload, validateUploadedFile } from '@/middleware/upload';
 import { fileService } from '@/services/FileService';
 import { createError } from '@/middleware/errorHandler';
+import { notificationService } from '@/services/NotificationService';
 
 const router = Router();
 
@@ -28,6 +29,13 @@ router.post(
 
       // Process the uploaded file
       const result = await fileService.processUploadedFile(req.fileMetadata);
+
+      // Send success notification
+      notificationService.sendFileUploadFeedback(
+        result.resumeId,
+        true,
+        result.originalName
+      );
 
       res.status(201).json({
         success: true,

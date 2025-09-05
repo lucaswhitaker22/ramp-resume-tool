@@ -1,9 +1,11 @@
 import express from 'express';
+import { createServer } from 'http';
 import config from '@/config/environment';
 import { helmet, cors, corsOptions, helmetOptions, rateLimiter } from '@/middleware/security';
 import requestId from '@/middleware/requestId';
 import requestLogger from '@/middleware/logging';
 import { errorHandler, notFoundHandler } from '@/middleware/errorHandler';
+import { initializeWebSocketService } from '@/services/WebSocketService';
 
 const app = express();
 
@@ -63,28 +65,37 @@ app.use('/api/v1', routes);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// Graceful shutdown handling
-const server = app.listen(config.port, () => {
+// Create HTTP server and initialize WebSocket
+const httpServer = createServer(app);
+const webSocketService = initializeWebSocketService(httpServer);
+
+// Start server
+const server = httpServer.listen(config.port, () => {
   console.log(`🚀 Server running on port ${config.port}`);
   console.log(`📊 Health check: http://localhost:${config.port}/health`);
   console.log(`🌍 Environment: ${config.env}`);
   console.log(`🔒 CORS origin: ${config.cors.origin}`);
+  console.log(`🔌 WebSocket server initialized`);
 });
 
 // Handle graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
-  server.close(() => {
-    console.log('Process terminated');
-    process.exit(0);
+  webSocketService.close().then(() => {
+    server.close(() => {
+      console.log('Process terminated');
+      process.exit(0);
+    });
   });
 });
 
 process.on('SIGINT', () => {
   console.log('SIGINT received, shutting down gracefully');
-  server.close(() => {
-    console.log('Process terminated');
-    process.exit(0);
+  webSocketService.close().then(() => {
+    server.close(() => {
+      console.log('Process terminated');
+      process.exit(0);
+    });
   });
 });
 

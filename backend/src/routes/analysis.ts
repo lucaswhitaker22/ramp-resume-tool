@@ -7,6 +7,8 @@ import { resumeContentAnalysisService } from '@/services/ResumeContentAnalysisSe
 import { scoringEngineService } from '@/services/ScoringEngineService';
 import { recommendationEngineService } from '@/services/RecommendationEngineService';
 import { atsCompatibilityService } from '@/services/ATSCompatibilityService';
+import { progressTrackingService } from '@/services/ProgressTrackingService';
+import { notificationService } from '@/services/NotificationService';
 
 const analysisResultModel = new AnalysisResultModel();
 const resumeModel = new ResumeModel();
@@ -84,11 +86,40 @@ router.post(
         improvementAreas: [],
       });
 
+      // Start progress tracking
+      progressTrackingService.startTracking(analysisId);
+
+      // Send initial notification
+      notificationService.sendInfo(
+        analysisId,
+        'Analysis Started',
+        'Your resume analysis has been queued and will begin shortly.',
+        5000
+      );
+
       // Start async analysis (don't await - let it run in background)
       performAnalysis(analysisId, resume, jobDescription).catch(error => {
         console.error('Analysis failed:', error);
-        // Note: We would need to add a method to update analysis status
-        // For now, we'll just log the error
+        progressTrackingService.fail(analysisId, error.message || 'Analysis failed due to unexpected error');
+        
+        // Send error notification
+        notificationService.sendError(
+          analysisId,
+          'Analysis Failed',
+          error.message || 'Analysis failed due to unexpected error',
+          [
+            {
+              label: 'Try Again',
+              action: 'retry',
+              data: { operation: 'analysis' },
+            },
+            {
+              label: 'Contact Support',
+              action: 'custom',
+              data: { action: 'contact-support' },
+            },
+          ]
+        );
       });
 
       res.status(202).json({
@@ -189,19 +220,27 @@ router.get(
         throw createError('Analysis not found', 404);
       }
 
+      // Get progress from tracking service
+      const progressData = progressTrackingService.getProgress(analysisId);
       let progress = 0;
       let estimatedCompletionTime = null;
+      let currentStep = 'Processing...';
 
-      if (analysisResult.status === 'pending') {
-        // Calculate progress based on time elapsed
-        const elapsed = Date.now() - analysisResult.analyzedAt.getTime();
-        progress = Math.min(Math.floor((elapsed / 30000) * 100), 95); // Max 95% until complete
-        estimatedCompletionTime = new Date(analysisResult.analyzedAt.getTime() + 30000);
-      } else if (analysisResult.status === 'processing') {
-        progress = 50; // Halfway through
-        estimatedCompletionTime = new Date(Date.now() + 15000); // 15 seconds remaining
-      } else if (analysisResult.status === 'completed') {
-        progress = 100;
+      if (progressData) {
+        progress = progressTrackingService.calculateProgressPercentage(analysisId);
+        estimatedCompletionTime = progressData.estimatedCompletionTime;
+        currentStep = progressData.steps[progressData.currentStep]?.description || 'Processing...';
+      } else {
+        // Fallback calculation if progress tracking is not available
+        if (analysisResult.status === 'pending') {
+          progress = 5;
+          estimatedCompletionTime = new Date(Date.now() + 30000);
+        } else if (analysisResult.status === 'processing') {
+          progress = 50;
+          estimatedCompletionTime = new Date(Date.now() + 15000);
+        } else if (analysisResult.status === 'completed') {
+          progress = 100;
+        }
       }
 
       res.json({
@@ -210,6 +249,7 @@ router.get(
           analysisId: analysisResult.id,
           status: analysisResult.status,
           progress,
+          currentStep,
           overallScore: analysisResult.overallScore,
           error: analysisResult.error,
           estimatedCompletionTime,
@@ -325,27 +365,37 @@ async function performAnalysis(
   jobDescription: any | null
 ): Promise<void> {
   try {
-    // Update status to processing
+    // Step 1: Initialization
+    progressTrackingService.nextStep(analysisId, 'Initializing analysis...');
     await analysisResultModel.updateStatus(analysisId, 'processing');
+    await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate initialization time
 
-    // Perform content analysis
+    // Step 2: Content extraction (already done, but simulate processing)
+    progressTrackingService.nextStep(analysisId, 'Extracting resume content...');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Step 3: Content analysis
+    progressTrackingService.nextStep(analysisId, 'Analyzing resume content...');
     const contentAnalysis = await resumeContentAnalysisService.analyzeResumeContent(
       resume.content_text || resume.extractedContent || ''
     );
 
-    // Perform ATS compatibility check
+    // Step 4: ATS compatibility check
+    progressTrackingService.nextStep(analysisId, 'Checking ATS compatibility...');
     const atsAnalysis = await atsCompatibilityService.checkATSCompatibility(
       resume.content_text || resume.extractedContent || ''
     );
 
-    // Calculate scores
+    // Step 5: Calculate scores
+    progressTrackingService.nextStep(analysisId, 'Calculating compatibility scores...');
     const scores = await scoringEngineService.calculateOverallScore(
       contentAnalysis,
       atsAnalysis,
       jobDescription?.requirements || null
     );
 
-    // Generate recommendations
+    // Step 6: Generate recommendations
+    progressTrackingService.nextStep(analysisId, 'Generating recommendations...');
     const recommendations = await recommendationEngineService.generateRecommendations(
       contentAnalysis,
       atsAnalysis,
@@ -353,6 +403,9 @@ async function performAnalysis(
       jobDescription?.requirements || null
     );
 
+    // Step 7: Finalization
+    progressTrackingService.nextStep(analysisId, 'Finalizing analysis results...');
+    
     // Update analysis result
     await analysisResultModel.updateResults(analysisId, {
       overallScore: scores.overallScore,
@@ -361,6 +414,17 @@ async function performAnalysis(
       strengths: recommendations.strengths,
       improvementAreas: recommendations.improvementAreas,
     });
+
+    // Complete progress tracking
+    progressTrackingService.complete(analysisId);
+
+    // Send completion notification
+    notificationService.sendAnalysisCompletion(
+      analysisId,
+      scores.overallScore,
+      recommendations.recommendations.length
+    );
+
   } catch (error) {
     console.error('Analysis processing error:', error);
     await analysisResultModel.updateStatus(
@@ -368,6 +432,10 @@ async function performAnalysis(
       'failed',
       error.message || 'Analysis failed due to unexpected error'
     );
+    
+    // Mark progress as failed
+    progressTrackingService.fail(analysisId, error.message || 'Analysis failed due to unexpected error');
+    
     throw error;
   }
 }
