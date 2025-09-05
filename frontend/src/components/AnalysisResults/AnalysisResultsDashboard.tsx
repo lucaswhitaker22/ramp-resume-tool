@@ -347,4 +347,71 @@ export const AnalysisResultsDashboard: React.FC<AnalysisResultsDashboardProps> =
       </Typography>
       
       <Typography variant="body2" color="text.secondary" gutterBottom>
-        Analyzed on {new Date(analysisResult.anal
+        Analyzed on {new Date(analysisResult.analyzedAt).toLocaleDateString()}
+      </Typography>
+
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs value={activeTab} onChange={handleTabChange}>
+          {TAB_CONFIGS.map((tab) => (
+            <Tab
+              key={tab.id}
+              label={tab.label}
+              value={tab.id}
+              icon={
+                tab.id === 'overview' ? <AssessmentIcon /> :
+                tab.id === 'content' ? <TrendingUpIcon /> :
+                tab.id === 'structure' ? <BuildIcon /> :
+                tab.id === 'keywords' ? <SearchIcon /> :
+                tab.id === 'experience' ? <WorkIcon /> :
+                <PsychologyIcon />
+              }
+            />
+          ))}
+        </Tabs>
+      </Box>
+
+      {activeTab === 'overview' ? (
+        renderOverviewTab()
+      ) : (
+        <Box>
+          {/* Filters and Sorting */}
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={12} md={4}>
+              <TextField
+                fullWidth
+                label="Search recommendations"
+                value={filters.searchTerm}
+                onChange={(e) => handleFilterChange('searchTerm', e.target.value)}
+                InputProps={{
+                  startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth>
+                <InputLabel>Sort by</InputLabel>
+                <Select
+                  value={`${sortOptions.field}-${sortOptions.direction}`}
+                  onChange={handleSortChange}
+                  label="Sort by"
+                >
+                  <MenuItem value="priority-desc">Priority (High to Low)</MenuItem>
+                  <MenuItem value="priority-asc">Priority (Low to High)</MenuItem>
+                  <MenuItem value="category-asc">Category (A to Z)</MenuItem>
+                  <MenuItem value="category-desc">Category (Z to A)</MenuItem>
+                  <MenuItem value="impact-asc">Impact (A to Z)</MenuItem>
+                  <MenuItem value="impact-desc">Impact (Z to A)</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
+
+          {/* Recommendations */}
+          {renderRecommendations(getRecommendationsForCategory(activeTab))}
+        </Box>
+      )}
+    </Paper>
+  );
+};
+
+export default AnalysisResultsDashboard;
