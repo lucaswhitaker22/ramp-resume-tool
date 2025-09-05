@@ -19,7 +19,7 @@
     "test:frontend": "cd frontend && npm test",
     "lint": "npm run lint:backend && npm run lint:frontend",
     
-    "lint:backend": "eslint backend/src --fix",,
+    "lint:backend": "eslint backend/src --fix",
     "lint:frontend": "eslint frontend/src --fix",
 
     "format": "npm run format:backend && npm run format:frontend",
@@ -35,8 +35,7 @@
   "lint-staged": {
     "backend/src/**/*.ts": ["npm run lint:backend"],
     "frontend/src/**/*.{ts,tsx}": ["npm run lint:frontend"]
-  }
-  ,
+  },
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=8.0.0"

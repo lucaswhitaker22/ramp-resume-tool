@@ -1,22 +1,21 @@
-// Jest setup file for backend tests
-import dotenv from 'dotenv';
+// Jest setup file for global test configuration
 
-// Load test environment variables
-dotenv.config({ path: '.env.test' });
+// Set test environment variables
+process.env['NODE_ENV'] = 'test';
+process.env['JWT_SECRET'] = 'test-jwt-secret-key-for-testing-only-32-chars';
+process.env['DB_PATH'] = ':memory:';
+process.env['REDIS_URL'] = 'redis://localhost:6379';
 
-// Global test setup
+// Suppress console logs during tests unless explicitly needed
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+
 beforeAll(() => {
-  // Setup test database, mocks, etc.
+  console.log = jest.fn();
+  console.error = jest.fn();
 });
 
 afterAll(() => {
-  // Cleanup after all tests
-});
-
-beforeEach(() => {
-  // Reset state before each test
-});
-
-afterEach(() => {
-  // Cleanup after each test
+  console.log = originalConsoleLog;
+  console.error = originalConsoleError;
 });

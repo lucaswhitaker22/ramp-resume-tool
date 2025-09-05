@@ -1,17 +1,18 @@
 import sqlite3 from 'sqlite3';
-import path from 'path';
-import fs from 'fs';
+import { dirname } from 'path';
+import { existsSync, mkdirSync } from 'fs';
+import config from './environment';
 
-const DB_PATH = process.env.DB_PATH || './data/resume_review.db';
-const DATA_DIR = path.dirname(DB_PATH);
+const DB_PATH = config.database.path;
+const DATA_DIR = dirname(DB_PATH);
 
 // Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!existsSync(DATA_DIR)) {
+  mkdirSync(DATA_DIR, { recursive: true });
 }
 
 // Enable verbose mode in development
-const sqlite = process.env.NODE_ENV === 'development' 
+const sqlite = config.env === 'development' 
   ? sqlite3.verbose() 
   : sqlite3;
 

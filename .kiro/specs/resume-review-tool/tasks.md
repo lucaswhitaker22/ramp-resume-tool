@@ -16,15 +16,20 @@
   - Configure ESLint, Prettier, and Husky for code quality
   - _Requirements: 8.1, 8.2_
 
-- [ ] 2. Backend Core Infrastructure
-  - [ ] 2.1 Express.js Server Setup
+- [-] 2. Backend Core Infrastructure
+
+
+  - [x] 2.1 Express.js Server Setup
+
+
     - Create Express server with TypeScript configuration
     - Implement middleware for CORS, body parsing, and request logging
     - Set up environment configuration management
     - Create basic health check endpoint
     - _Requirements: 6.1, 8.3_
 
-  - [ ] 2.2 Database Setup and Models
+  - [-] 2.2 Database Setup and Models
+
     - Configure PostgreSQL connection with connection pooling
     - Create database schema for resume metadata and analysis results
     - Implement Sequelize/TypeORM models for data entities
