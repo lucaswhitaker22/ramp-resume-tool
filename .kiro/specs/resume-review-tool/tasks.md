@@ -16,7 +16,9 @@
   - Configure ESLint, Prettier, and Husky for code quality
   - _Requirements: 8.1, 8.2_
 
-- [-] 2. Backend Core Infrastructure
+- [x] 2. Backend Core Infrastructure
+
+
 
 
   - [x] 2.1 Express.js Server Setup
@@ -28,7 +30,8 @@
     - Create basic health check endpoint
     - _Requirements: 6.1, 8.3_
 
-  - [-] 2.2 Database Setup and Models
+  - [x] 2.2 Database Setup and Models
+
 
     - Configure PostgreSQL connection with connection pooling
     - Create database schema for resume metadata and analysis results
@@ -36,7 +39,9 @@
     - Set up database migration system
     - _Requirements: 7.2, 7.3_
 
-  - [ ] 2.3 File Upload Infrastructure
+  - [x] 2.3 File Upload Infrastructure
+
+
     - Implement Multer configuration for file uploads
     - Create file validation middleware for format and size checks
     - Set up temporary file storage with automatic cleanup

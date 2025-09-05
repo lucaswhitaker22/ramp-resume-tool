@@ -4,28 +4,28 @@ export interface ResumeEntity {
   id: string;
   filename: string;
   file_size: number;
-  content_text?: string;
+  content_text: string | null;
   uploaded_at: string;
-  processed_at?: string;
+  processed_at: string | null;
   status: 'uploaded' | 'processing' | 'completed' | 'failed';
 }
 
 export interface JobDescriptionEntity {
   id: string;
   content: string;
-  extracted_requirements?: string;
+  extracted_requirements: string | null;
   created_at: string;
 }
 
 export interface AnalysisResultEntity {
   id: string;
   resume_id: string;
-  job_description_id?: string;
-  overall_score?: number;
-  category_scores?: string; // JSON string
-  recommendations?: string; // JSON string
-  strengths?: string; // JSON string
-  improvement_areas?: string; // JSON string
+  job_description_id: string | null;
+  overall_score: number | null;
+  category_scores: string | null; // JSON string
+  recommendations: string | null; // JSON string
+  strengths: string | null; // JSON string
+  improvement_areas: string | null; // JSON string
   analyzed_at: string;
 }
 

@@ -55,8 +55,9 @@ app.get('/api', (_req, res) => {
   });
 });
 
-// API routes will be added here
-// app.use('/api/v1', routes);
+// API routes
+import routes from '@/routes';
+app.use('/api/v1', routes);
 
 // Error handling middleware (must be last)
 app.use(notFoundHandler);

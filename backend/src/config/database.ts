@@ -27,9 +27,7 @@ class Database {
           reject(err);
         } else {
           console.log('✅ Connected to SQLite database');
-          this.initializeTables()
-            .then(() => resolve())
-            .catch(reject);
+          resolve();
         }
       });
     });
@@ -53,41 +51,12 @@ class Database {
     });
   }
 
-  private async initializeTables(): Promise<void> {
-    const tables = [
-      `CREATE TABLE IF NOT EXISTS resumes (
-        id TEXT PRIMARY KEY,
-        filename TEXT NOT NULL,
-        file_size INTEGER NOT NULL,
-        content_text TEXT,
-        uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        processed_at DATETIME,
-        status TEXT DEFAULT 'uploaded'
-      )`,
-      `CREATE TABLE IF NOT EXISTS job_descriptions (
-        id TEXT PRIMARY KEY,
-        content TEXT NOT NULL,
-        extracted_requirements TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`,
-      `CREATE TABLE IF NOT EXISTS analysis_results (
-        id TEXT PRIMARY KEY,
-        resume_id TEXT NOT NULL,
-        job_description_id TEXT,
-        overall_score INTEGER,
-        category_scores TEXT,
-        recommendations TEXT,
-        strengths TEXT,
-        improvement_areas TEXT,
-        analyzed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (resume_id) REFERENCES resumes (id),
-        FOREIGN KEY (job_description_id) REFERENCES job_descriptions (id)
-      )`
-    ];
-
-    for (const table of tables) {
-      await this.run(table);
-    }
+  /**
+   * Initialize database with migrations
+   */
+  async initialize(): Promise<void> {
+    const { migrationManager } = await import('./migrations');
+    await migrationManager.migrate();
   }
 
   async run(sql: string, params: any[] = []): Promise<void> {
