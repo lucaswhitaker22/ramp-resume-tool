@@ -25,20 +25,31 @@ export const errorHandler = (
   // Create error context
   const context: ErrorContext = {
     operation: `${req.method} ${req.path}`,
-    userAgent: req.get('User-Agent'),
-    ipAddress: req.ip,
     timestamp: new Date(),
   };
 
+  // Add optional properties only if they exist
+  const userAgent = req.get('User-Agent');
+  if (userAgent) {
+    context.userAgent = userAgent;
+  }
+  const ipAddress = req.ip;
+  if (ipAddress) {
+    context.ipAddress = ipAddress;
+  }
+
   // Extract IDs from request if available
-  if (req.params.analysisId) {
-    context.analysisId = req.params.analysisId;
+  const analysisId = req.params['analysisId'];
+  if (analysisId) {
+    context.analysisId = analysisId;
   }
-  if (req.params.resumeId) {
-    context.resumeId = req.params.resumeId;
+  const resumeId = req.params['resumeId'];
+  if (resumeId) {
+    context.resumeId = resumeId;
   }
-  if (req.params.jobDescriptionId) {
-    context.jobDescriptionId = req.params.jobDescriptionId;
+  const jobDescriptionId = req.params['jobDescriptionId'];
+  if (jobDescriptionId) {
+    context.jobDescriptionId = jobDescriptionId;
   }
 
   // Handle error with error handling service
@@ -133,7 +144,9 @@ export const createError = (message: string, statusCode: number = 500, code?: st
   const error = new Error(message) as AppError;
   error.statusCode = statusCode;
   error.isOperational = true;
-  error.code = code;
+  if (code) {
+    error.code = code;
+  }
   return error;
 };
 

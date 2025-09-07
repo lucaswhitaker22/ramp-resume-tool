@@ -5,7 +5,7 @@ export interface Notification {
   type: 'success' | 'info' | 'warning' | 'error';
   title: string;
   message: string;
-  duration?: number; // milliseconds, null for persistent
+  duration?: number | null; // milliseconds, null for persistent
   actions?: NotificationAction[];
   metadata?: any;
   timestamp: Date;
@@ -44,9 +44,12 @@ export class NotificationService {
       title,
       message,
       duration: 5000, // 5 seconds
-      actions,
       timestamp: new Date(),
     };
+
+    if (actions) {
+      notification.actions = actions;
+    }
 
     this.sendNotification(analysisId, notification);
   }
@@ -67,9 +70,12 @@ export class NotificationService {
       title,
       message,
       duration: duration || 4000, // 4 seconds default
-      actions,
       timestamp: new Date(),
     };
+
+    if (actions) {
+      notification.actions = actions;
+    }
 
     this.sendNotification(analysisId, notification);
   }
@@ -89,9 +95,12 @@ export class NotificationService {
       title,
       message,
       duration: 8000, // 8 seconds
-      actions,
       timestamp: new Date(),
     };
+
+    if (actions) {
+      notification.actions = actions;
+    }
 
     this.sendNotification(analysisId, notification);
   }
@@ -111,9 +120,12 @@ export class NotificationService {
       title,
       message,
       duration: null, // Persistent until dismissed
-      actions,
       timestamp: new Date(),
     };
+
+    if (actions) {
+      notification.actions = actions;
+    }
 
     this.sendNotification(analysisId, notification);
   }
@@ -296,10 +308,13 @@ export class NotificationService {
       title: this.generateTitleFromFeedbackType(feedback.type),
       message: feedback.message,
       duration: feedback.persistent ? null : this.getDefaultDuration(feedback.type),
-      actions: feedback.actions,
       metadata: { details: feedback.details },
       timestamp: new Date(),
     };
+
+    if (feedback.actions) {
+      notification.actions = feedback.actions;
+    }
 
     this.sendNotification(analysisId, notification);
   }
@@ -364,8 +379,13 @@ export class NotificationService {
       if (notification.duration === null) {
         return true; // Persistent notifications
       }
-      
-      const expiryTime = notification.timestamp.getTime() + notification.duration;
+
+      const duration = notification.duration;
+      if (duration === undefined) {
+        return false; // Should not happen, but safety check
+      }
+
+      const expiryTime = notification.timestamp.getTime() + duration;
       return now < expiryTime;
     });
   }
@@ -385,7 +405,10 @@ export class NotificationService {
     }
 
     // Mark as dismissed by setting duration to 0
-    history[index].duration = 0;
+    const notification = history[index];
+    if (notification) {
+      notification.duration = 0;
+    }
     return true;
   }
 
@@ -411,8 +434,11 @@ export class NotificationService {
     this.notificationHistory.forEach(history => {
       history.forEach(notification => {
         totalNotifications++;
-        byType[notification.type]++;
-        
+        const type = notification.type;
+        if (byType[type] !== undefined) {
+          byType[type]++;
+        }
+
         if (notification.timestamp.getTime() > oneHourAgo) {
           recentNotifications++;
         }
@@ -474,7 +500,7 @@ export class NotificationService {
   /**
    * Get default duration for feedback type
    */
-  private getDefaultDuration(feedbackType: string): number {
+  private getDefaultDuration(feedbackType: string): number | null {
     switch (feedbackType) {
       case 'error':
         return null; // Persistent

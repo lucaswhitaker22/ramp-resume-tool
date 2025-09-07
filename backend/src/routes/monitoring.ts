@@ -160,7 +160,7 @@ router.get(
       }
       
       // Deduct points for failed analyses
-      const failedAnalyses = progressStats.byStatus.failed || 0;
+      const failedAnalyses = progressStats.byStatus['failed'] || 0;
       if (failedAnalyses > 0) {
         healthScore -= Math.min(failedAnalyses * 5, 20);
       }
@@ -218,9 +218,9 @@ router.get(
  */
 router.post(
   '/test-error',
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, _res: Response, next: NextFunction) => {
     try {
-      if (process.env.NODE_ENV === 'production') {
+      if (process.env['NODE_ENV'] === 'production') {
         throw createError('Test endpoints not available in production', 403);
       }
 
@@ -246,7 +246,7 @@ router.post(
 
       // Add analysisId to request params if provided for error context
       if (analysisId) {
-        req.params.analysisId = analysisId;
+        req.params['analysisId'] = analysisId;
       }
 
       throw error;

@@ -12,10 +12,10 @@ export interface AnalysisProgress {
   currentStep: number;
   steps: AnalysisStep[];
   startTime: Date;
-  estimatedCompletionTime?: Date;
-  actualCompletionTime?: Date;
+  estimatedCompletionTime?: Date | undefined;
+  actualCompletionTime?: Date | undefined;
   status: 'pending' | 'processing' | 'completed' | 'failed';
-  error?: string;
+  error?: string | undefined;
 }
 
 export class ProgressTrackingService {
@@ -109,8 +109,8 @@ export class ProgressTrackingService {
       progress.estimatedCompletionTime = new Date(Date.now() + remainingDuration);
 
       // Override step description if provided
-      if (customDescription) {
-        progress.steps[progress.currentStep].description = customDescription;
+      if (customDescription && progress.currentStep < progress.steps.length) {
+        progress.steps[progress.currentStep]!.description = customDescription;
       }
 
       this.sendProgressUpdate(analysisId);
@@ -198,16 +198,18 @@ export class ProgressTrackingService {
     // Calculate based on completed steps and their weights
     let completedWeight = 0;
     for (let i = 0; i < progress.currentStep; i++) {
-      completedWeight += progress.steps[i].weight;
+      if (i < progress.steps.length) {
+        completedWeight += progress.steps[i]!.weight;
+      }
     }
 
     // Add partial progress for current step based on time elapsed
     if (progress.currentStep < progress.steps.length) {
-      const currentStep = progress.steps[progress.currentStep];
-      const stepStartTime = progress.startTime.getTime() + 
+      const currentStep = progress.steps[progress.currentStep]!;
+      const stepStartTime = progress.startTime.getTime() +
         progress.steps.slice(0, progress.currentStep)
           .reduce((sum, step) => sum + step.estimatedDuration, 0);
-      
+
       const elapsed = Date.now() - stepStartTime;
       const stepProgress = Math.min(elapsed / currentStep.estimatedDuration, 1);
       completedWeight += currentStep.weight * stepProgress;
@@ -226,7 +228,7 @@ export class ProgressTrackingService {
     }
 
     const progressPercentage = this.calculateProgressPercentage(analysisId);
-    const currentStep = progress.steps[progress.currentStep];
+    const currentStep = progress.currentStep < progress.steps.length ? progress.steps[progress.currentStep] : undefined;
 
     const update: ProgressUpdate = {
       analysisId,
@@ -293,8 +295,8 @@ export class ProgressTrackingService {
     let completedCount = 0;
 
     analyses.forEach(progress => {
-      byStatus[progress.status]++;
-      
+      (byStatus as any)[progress.status]++;
+
       if (progress.actualCompletionTime) {
         totalCompletionTime += progress.actualCompletionTime.getTime() - progress.startTime.getTime();
         completedCount++;

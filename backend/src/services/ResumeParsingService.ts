@@ -27,7 +27,7 @@ export class ResumeParsingService {
    */
   parseResumeContent(rawText: string): ResumeContent {
     const sections = this.detectSections(rawText);
-    
+
     return {
       rawText,
       sections: {
@@ -39,6 +39,16 @@ export class ResumeParsingService {
         certifications: this.extractCertifications(sections)
       }
     };
+  }
+
+  /**
+   * Parse resume content and return both content and sections
+   */
+  parseResumeWithSections(rawText: string): { content: ResumeContent; sections: ParsedResumeSection[] } {
+    const sections = this.detectSections(rawText);
+    const content = this.parseResumeContent(rawText);
+
+    return { content, sections };
   }
 
   /**

@@ -3,16 +3,22 @@ import { createError } from '@/middleware/errorHandler';
 import { AnalysisResultModel } from '@/models/AnalysisResult';
 import { ResumeModel } from '@/models/Resume';
 import { JobDescriptionModel } from '@/models/JobDescription';
-import { resumeContentAnalysisService } from '@/services/ResumeContentAnalysisService';
-import { scoringEngineService } from '@/services/ScoringEngineService';
-import { recommendationEngineService } from '@/services/RecommendationEngineService';
-import { atsCompatibilityService } from '@/services/ATSCompatibilityService';
+import { ResumeContentAnalysisService } from '@/services/ResumeContentAnalysisService';
+import { ScoringEngineService } from '@/services/ScoringEngineService';
+import { RecommendationEngineService } from '@/services/RecommendationEngineService';
+import { ATSCompatibilityService } from '@/services/ATSCompatibilityService';
+import { ResumeParsingService } from '@/services/ResumeParsingService';
 import { progressTrackingService } from '@/services/ProgressTrackingService';
 import { notificationService } from '@/services/NotificationService';
 
 const analysisResultModel = new AnalysisResultModel();
 const resumeModel = new ResumeModel();
 const jobDescriptionModel = new JobDescriptionModel();
+const resumeContentAnalysisService = new ResumeContentAnalysisService();
+const scoringEngineService = new ScoringEngineService();
+const recommendationEngineService = new RecommendationEngineService();
+const atsCompatibilityService = new ATSCompatibilityService();
+const resumeParsingService = new ResumeParsingService();
 
 const router = Router();
 
@@ -53,7 +59,7 @@ router.post(
       if (existingAnalysis) {
         const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
         if (existingAnalysis.analyzedAt > oneHourAgo) {
-          return res.json({
+          res.json({
             success: true,
             data: {
               analysisId: existingAnalysis.id,
@@ -258,7 +264,9 @@ router.get(
       });
     } catch (error) {
       next(error);
+      return;
     }
+    return;
   }
 );
 
@@ -370,49 +378,66 @@ async function performAnalysis(
     await analysisResultModel.updateStatus(analysisId, 'processing');
     await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate initialization time
 
-    // Step 2: Content extraction (already done, but simulate processing)
-    progressTrackingService.nextStep(analysisId, 'Extracting resume content...');
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Step 2: Parse resume content
+    progressTrackingService.nextStep(analysisId, 'Parsing resume content...');
+    const resumeText = resume.content_text || resume.extractedContent || '';
+    const { content: parsedResume, sections } = resumeParsingService.parseResumeWithSections(resumeText);
+    console.log('Parsed resume:', JSON.stringify(parsedResume, null, 2));
 
     // Step 3: Content analysis
     progressTrackingService.nextStep(analysisId, 'Analyzing resume content...');
     const contentAnalysis = await resumeContentAnalysisService.analyzeResumeContent(
-      resume.content_text || resume.extractedContent || ''
+      parsedResume,
+      sections,
+      jobDescription?.requirements || undefined
     );
+    console.log('Content analysis result:', JSON.stringify(contentAnalysis, null, 2));
 
     // Step 4: ATS compatibility check
     progressTrackingService.nextStep(analysisId, 'Checking ATS compatibility...');
-    const atsAnalysis = await atsCompatibilityService.checkATSCompatibility(
-      resume.content_text || resume.extractedContent || ''
+    const atsAnalysis = atsCompatibilityService.analyzeATSCompatibility(
+      parsedResume,
+      sections
     );
+    console.log('ATS analysis result:', JSON.stringify(atsAnalysis, null, 2));
 
     // Step 5: Calculate scores
     progressTrackingService.nextStep(analysisId, 'Calculating compatibility scores...');
     const scores = await scoringEngineService.calculateOverallScore(
-      contentAnalysis,
-      atsAnalysis,
-      jobDescription?.requirements || null
+      parsedResume,
+      sections,
+      jobDescription?.requirements || undefined,
+      jobDescription?.content || undefined
     );
 
     // Step 6: Generate recommendations
     progressTrackingService.nextStep(analysisId, 'Generating recommendations...');
     const recommendations = await recommendationEngineService.generateRecommendations(
-      contentAnalysis,
-      atsAnalysis,
-      scores,
-      jobDescription?.requirements || null
+      parsedResume,
+      sections,
+      scores.categoryScores,
+      jobDescription?.requirements || undefined
     );
+    console.log('Recommendations result:', JSON.stringify(recommendations, null, 2));
 
     // Step 7: Finalization
     progressTrackingService.nextStep(analysisId, 'Finalizing analysis results...');
-    
+
     // Update analysis result
     await analysisResultModel.updateResults(analysisId, {
       overallScore: scores.overallScore,
       categoryScores: scores.categoryScores,
-      recommendations: recommendations.recommendations,
-      strengths: recommendations.strengths,
-      improvementAreas: recommendations.improvementAreas,
+      recommendations: recommendations.recommendations.map(r => ({
+        id: r.id,
+        category: r.category,
+        priority: r.priority,
+        title: r.title,
+        description: r.description,
+        impact: r.impact,
+        ...(r.examples && { examples: r.examples })
+      })),
+      strengths: scores.explanation.strengths,
+      improvementAreas: scores.explanation.improvements,
     });
 
     // Complete progress tracking
@@ -427,15 +452,16 @@ async function performAnalysis(
 
   } catch (error) {
     console.error('Analysis processing error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Analysis failed due to unexpected error';
     await analysisResultModel.updateStatus(
       analysisId,
       'failed',
-      error.message || 'Analysis failed due to unexpected error'
+      errorMessage
     );
-    
+
     // Mark progress as failed
-    progressTrackingService.fail(analysisId, error.message || 'Analysis failed due to unexpected error');
-    
+    progressTrackingService.fail(analysisId, errorMessage);
+
     throw error;
   }
 }

@@ -1,9 +1,10 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { jobDescriptionAnalysisService } from '@/services/JobDescriptionAnalysisService';
+import { JobDescriptionAnalysisService } from '@/services/JobDescriptionAnalysisService';
 import { createError } from '@/middleware/errorHandler';
 import { JobDescriptionModel } from '@/models/JobDescription';
 
 const jobDescriptionModel = new JobDescriptionModel();
+const jobDescriptionAnalysisService = new JobDescriptionAnalysisService();
 
 const router = Router();
 
@@ -15,7 +16,7 @@ router.post(
   '/',
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { content, title, company } = req.body;
+      const { content } = req.body;
 
       if (!content || typeof content !== 'string') {
         throw createError('Job description content is required', 400);

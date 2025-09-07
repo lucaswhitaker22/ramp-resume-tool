@@ -1,15 +1,14 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HttpServer } from 'http';
-import { createError } from '@/middleware/errorHandler';
 
 export interface ProgressUpdate {
   analysisId: string;
   status: 'pending' | 'processing' | 'completed' | 'failed';
   progress: number; // 0-100
-  currentStep?: string;
-  estimatedCompletionTime?: Date;
-  error?: string;
-  data?: any;
+  currentStep?: string | undefined;
+  estimatedCompletionTime?: Date | undefined;
+  error?: string | undefined;
+  data?: any | undefined;
 }
 
 export class WebSocketService {
@@ -19,7 +18,7 @@ export class WebSocketService {
   constructor(server: HttpServer) {
     this.io = new SocketIOServer(server, {
       cors: {
-        origin: process.env.CORS_ORIGIN || "http://localhost:3000",
+        origin: process.env['CORS_ORIGIN'] || "http://localhost:3000",
         methods: ["GET", "POST"],
         credentials: true,
       },

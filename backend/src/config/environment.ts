@@ -3,6 +3,7 @@ import Joi from 'joi';
 
 // Load environment variables
 dotenv.config();
+console.log('Environment config loaded successfully');
 
 // Environment validation schema
 const envSchema = Joi.object({
