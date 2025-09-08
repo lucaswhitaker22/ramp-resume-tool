@@ -86,6 +86,34 @@ export class WebSocketService {
         socket.emit('pong', { timestamp: new Date().toISOString() });
       });
 
+      // Handle client reconnection
+      socket.on('reconnect-analysis', (analysisId: string) => {
+        if (!analysisId || typeof analysisId !== 'string') {
+          socket.emit('error', { message: 'Invalid analysis ID for reconnection' });
+          return;
+        }
+
+        // Re-subscribe to analysis
+        if (!this.connectedClients.has(analysisId)) {
+          this.connectedClients.set(analysisId, []);
+        }
+        
+        const subscribers = this.connectedClients.get(analysisId)!;
+        if (!subscribers.includes(socket.id)) {
+          subscribers.push(socket.id);
+        }
+
+        socket.join(`analysis-${analysisId}`);
+        
+        console.log(`Client ${socket.id} reconnected to analysis ${analysisId}`);
+        
+        // Send current status if available
+        socket.emit('reconnected', { 
+          analysisId,
+          timestamp: new Date().toISOString(),
+        });
+      });
+
       // Handle disconnection
       socket.on('disconnect', (reason) => {
         console.log(`WebSocket client disconnected: ${socket.id}, reason: ${reason}`);
@@ -132,16 +160,34 @@ export class WebSocketService {
   /**
    * Send error notification to analysis subscribers
    */
-  public sendError(analysisId: string, error: string): void {
+  public sendError(analysisId: string, error: string, retryable: boolean = false): void {
     const room = `analysis-${analysisId}`;
     
     this.io.to(room).emit('analysis-error', {
       analysisId,
       error,
+      retryable,
       timestamp: new Date().toISOString(),
     });
 
-    console.log(`Error notification sent for analysis ${analysisId}: ${error}`);
+    console.log(`Error notification sent for analysis ${analysisId}: ${error} (retryable: ${retryable})`);
+  }
+
+  /**
+   * Send retry notification to analysis subscribers
+   */
+  public sendRetryNotification(analysisId: string, attempt: number, maxAttempts: number, nextRetryIn: number): void {
+    const room = `analysis-${analysisId}`;
+    
+    this.io.to(room).emit('analysis-retry', {
+      analysisId,
+      attempt,
+      maxAttempts,
+      nextRetryIn,
+      timestamp: new Date().toISOString(),
+    });
+
+    console.log(`Retry notification sent for analysis ${analysisId}: attempt ${attempt}/${maxAttempts}, next retry in ${nextRetryIn}ms`);
   }
 
   /**

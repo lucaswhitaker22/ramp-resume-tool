@@ -200,4 +200,48 @@ router.get(
   }
 );
 
+/**
+ * POST /api/v1/websocket/test-connection
+ * Test WebSocket connection functionality
+ */
+router.post(
+  '/test-connection',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { analysisId = 'test-connection' } = req.body;
+      
+      const webSocketService = getWebSocketService();
+      
+      // Send a test message
+      webSocketService.sendProgressUpdate({
+        analysisId,
+        status: 'processing',
+        progress: 50,
+        currentStep: 'Testing WebSocket connection',
+        estimatedCompletionTime: new Date(Date.now() + 5000),
+      });
+
+      // Send test completion after a short delay
+      setTimeout(() => {
+        webSocketService.sendCompletion(analysisId, {
+          message: 'WebSocket connection test completed successfully',
+          testTimestamp: new Date().toISOString(),
+        });
+      }, 2000);
+
+      res.json({
+        success: true,
+        data: {
+          testAnalysisId: analysisId,
+          message: 'WebSocket test messages sent',
+          subscriberCount: webSocketService.getSubscriberCount(analysisId),
+          totalConnections: webSocketService.getTotalConnections(),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 export default router;

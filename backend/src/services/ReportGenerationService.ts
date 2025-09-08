@@ -57,7 +57,7 @@ export class ReportGenerationService {
   /**
    * Export report to PDF using PDFKit
    */
-  async exportToPDF(report: FeedbackReport): Promise<Buffer> {
+  async exportToPDF(report: FeedbackReport, _options?: any): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       try {
         const doc = new PDFDocument({

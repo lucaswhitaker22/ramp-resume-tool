@@ -6,6 +6,7 @@ import requestId from '@/middleware/requestId';
 import requestLogger from '@/middleware/logging';
 import { errorHandler, notFoundHandler } from '@/middleware/errorHandler';
 import { initializeWebSocketService } from '@/services/WebSocketService';
+import database from '@/config/database';
 
 const app = express();
 
@@ -65,38 +66,58 @@ app.use('/api/v1', routes);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-// Create HTTP server and initialize WebSocket
-const httpServer = createServer(app);
-const webSocketService = initializeWebSocketService(httpServer);
+// Initialize database and start server
+async function startServer() {
+  try {
+    // Connect to database
+    await database.connect();
+    console.log('📊 Database connected successfully');
+    
+    // Initialize database with migrations
+    await database.initialize();
+    console.log('🔄 Database initialized with migrations');
+    
+    // Create HTTP server and initialize WebSocket
+    const httpServer = createServer(app);
+    const webSocketService = initializeWebSocketService(httpServer);
 
-// Start server
-const server = httpServer.listen(config.port, () => {
-  console.log(`🚀 Server running on port ${config.port}`);
-  console.log(`📊 Health check: http://localhost:${config.port}/health`);
-  console.log(`🌍 Environment: ${config.env}`);
-  console.log(`🔒 CORS origin: ${config.cors.origin}`);
-  console.log(`🔌 WebSocket server initialized`);
-});
-
-// Handle graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down gracefully');
-  webSocketService.close().then(() => {
-    server.close(() => {
-      console.log('Process terminated');
-      process.exit(0);
+    // Start server
+    const server = httpServer.listen(config.port, () => {
+      console.log(`🚀 Server running on port ${config.port}`);
+      console.log(`📊 Health check: http://localhost:${config.port}/health`);
+      console.log(`🌍 Environment: ${config.env}`);
+      console.log(`🔒 CORS origin: ${config.cors.origin}`);
+      console.log(`🔌 WebSocket server initialized`);
     });
-  });
-});
 
-process.on('SIGINT', () => {
-  console.log('SIGINT received, shutting down gracefully');
-  webSocketService.close().then(() => {
-    server.close(() => {
-      console.log('Process terminated');
-      process.exit(0);
-    });
-  });
-});
+    // Handle graceful shutdown
+    const gracefulShutdown = async () => {
+      console.log('Shutting down gracefully...');
+      try {
+        await webSocketService.close();
+        await database.disconnect();
+        server.close(() => {
+          console.log('Process terminated');
+          process.exit(0);
+        });
+      } catch (error) {
+        console.error('Error during shutdown:', error);
+        process.exit(1);
+      }
+    };
+
+    process.on('SIGTERM', gracefulShutdown);
+    process.on('SIGINT', gracefulShutdown);
+
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+// Start the server
+startServer();
+
+
 
 export default app;

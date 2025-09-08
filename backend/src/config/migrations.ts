@@ -165,6 +165,7 @@ migrationManager.register({
         filename TEXT NOT NULL,
         file_size INTEGER NOT NULL,
         content_text TEXT,
+        candidate_name TEXT NOT NULL,
         uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         processed_at DATETIME,
         status TEXT DEFAULT 'uploaded' CHECK (status IN ('uploaded', 'processing', 'completed', 'failed'))
@@ -210,6 +211,73 @@ migrationManager.register({
     await database.run('DROP TABLE IF EXISTS analysis_results');
     await database.run('DROP TABLE IF EXISTS job_descriptions');
     await database.run('DROP TABLE IF EXISTS resumes');
+  },
+});
+
+// Add status and error columns to analysis_results table
+migrationManager.register({
+  version: 2,
+  name: 'add_status_error_to_analysis_results',
+  up: async () => {
+    // Add status column
+    await database.run(`
+      ALTER TABLE analysis_results 
+      ADD COLUMN status TEXT DEFAULT 'pending' 
+      CHECK (status IN ('pending', 'processing', 'completed', 'failed'))
+    `);
+
+    // Add error column
+    await database.run(`
+      ALTER TABLE analysis_results 
+      ADD COLUMN error TEXT
+    `);
+
+    // Create index for status column
+    await database.run('CREATE INDEX IF NOT EXISTS idx_analysis_results_status ON analysis_results (status)');
+  },
+  down: async () => {
+    // SQLite doesn't support DROP COLUMN, so we'd need to recreate the table
+    // For now, we'll leave the columns (they won't hurt anything)
+    console.log('Note: SQLite does not support DROP COLUMN. Columns status and error will remain.');
+  },
+});
+
+// Add candidate_name column to resumes table
+migrationManager.register({
+  version: 3,
+  name: 'add_candidate_name_to_resumes',
+  up: async () => {
+    // Add candidate_name column
+    await database.run(`
+      ALTER TABLE resumes 
+      ADD COLUMN candidate_name TEXT DEFAULT 'Unknown Candidate'
+    `);
+
+    // Update existing records with extracted names from filenames
+    const resumes = await database.all<{ id: string; filename: string }>('SELECT id, filename FROM resumes');
+    
+    for (const resume of resumes) {
+      const baseName = resume.filename.replace(/\.[^/.]+$/, '');
+      const nameMatch = baseName.match(/^([A-Za-z]+[_\s-]+[A-Za-z]+)/);
+      let candidateName = 'Unknown Candidate';
+      
+      if (nameMatch && nameMatch[1]) {
+        candidateName = nameMatch[1].replace(/[_-]/g, ' ').trim();
+      } else {
+        candidateName = baseName
+          .replace(/[_-]/g, ' ')
+          .replace(/\b(resume|cv|curriculum|vitae)\b/gi, '')
+          .trim() || 'Unknown Candidate';
+      }
+      
+      await database.run('UPDATE resumes SET candidate_name = ? WHERE id = ?', [candidateName, resume.id]);
+    }
+
+    // Create index for candidate_name column
+    await database.run('CREATE INDEX IF NOT EXISTS idx_resumes_candidate_name ON resumes (candidate_name)');
+  },
+  down: async () => {
+    console.log('Note: SQLite does not support DROP COLUMN. Column candidate_name will remain.');
   },
 });
 

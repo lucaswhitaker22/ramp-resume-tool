@@ -2,72 +2,87 @@ import { apiRequest } from '../utils/api';
 import { JobDescription, ApiResponse, PaginatedResponse } from '../types';
 
 export interface CreateJobDescriptionRequest {
-  title: string;
-  company: string;
-  description: string;
-  requirements?: string[];
-  preferredSkills?: string[];
-  experienceLevel?: string;
+  content: string;
 }
 
-export interface UpdateJobDescriptionRequest extends Partial<CreateJobDescriptionRequest> {
-  id: string;
+export interface UpdateJobDescriptionRequest {
+  content: string;
 }
 
 class JobDescriptionService {
   async createJobDescription(data: CreateJobDescriptionRequest): Promise<ApiResponse<JobDescription>> {
-    return apiRequest.post<JobDescription>('/job-descriptions', data);
+    return apiRequest.post<JobDescription>('/job-description', data);
   }
 
-  async updateJobDescription(data: UpdateJobDescriptionRequest): Promise<ApiResponse<JobDescription>> {
-    const { id, ...updateData } = data;
-    return apiRequest.put<JobDescription>(`/job-descriptions/${id}`, updateData);
+  async updateJobDescription(id: string, data: UpdateJobDescriptionRequest): Promise<ApiResponse<JobDescription>> {
+    return apiRequest.put<JobDescription>(`/job-description/${id}`, data);
   }
 
   async getJobDescription(id: string): Promise<ApiResponse<JobDescription>> {
-    return apiRequest.get<JobDescription>(`/job-descriptions/${id}`);
-  }
-
-  async getJobDescriptions(
-    page: number = 1,
-    limit: number = 10
-  ): Promise<ApiResponse<PaginatedResponse<JobDescription>>> {
-    return apiRequest.get<PaginatedResponse<JobDescription>>(
-      `/job-descriptions?page=${page}&limit=${limit}`
-    );
+    return apiRequest.get<JobDescription>(`/job-description/${id}`);
   }
 
   async deleteJobDescription(id: string): Promise<ApiResponse<void>> {
-    return apiRequest.delete<void>(`/job-descriptions/${id}`);
+    return apiRequest.delete<void>(`/job-description/${id}`);
   }
 
-  async analyzeJobDescription(description: string): Promise<ApiResponse<{
-    requirements: string[];
-    preferredSkills: string[];
-    experienceLevel: string;
-    keyTerms: string[];
+  async getJobDescriptions(filters: {
+    search?: string;
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  } = {}): Promise<PaginatedResponse<any>> {
+    const params = new URLSearchParams();
+    
+    if (filters.search) params.append('search', filters.search);
+    if (filters.page) params.append('page', filters.page.toString());
+    if (filters.limit) params.append('limit', filters.limit.toString());
+    if (filters.sortBy) params.append('sortBy', filters.sortBy);
+    if (filters.sortOrder) params.append('sortOrder', filters.sortOrder);
+
+    const response = await apiRequest.get<PaginatedResponse<any>>(`/job-description?${params.toString()}`);
+    return response.data;
+  }
+
+  async getJobDescriptionStats(): Promise<{
+    total: number;
+    withRequirements: number;
+    avgContentLength: number;
+    recentCount: number;
+  }> {
+    const response = await apiRequest.get<{
+      total: number;
+      withRequirements: number;
+      avgContentLength: number;
+      recentCount: number;
+    }>('/job-description/stats');
+    return response.data;
+  }
+
+  async validateJobDescriptionContent(content: string): Promise<ApiResponse<{
+    isValid: boolean;
+    errors: string[];
+    warnings: string[];
+    contentInfo: {
+      length: number;
+      wordCount: number;
+      hasRequirements: boolean;
+      hasResponsibilities: boolean;
+    };
   }>> {
-    return apiRequest.post('/job-descriptions/analyze', { description });
+    return apiRequest.post('/job-description/validate', { content });
   }
 
   // Auto-save functionality
   async autoSaveJobDescription(
     id: string | null,
-    data: Partial<JobDescription>
+    content: string
   ): Promise<ApiResponse<JobDescription>> {
     if (id) {
-      return this.updateJobDescription({ id, ...data });
+      return this.updateJobDescription(id, { content });
     } else {
-      // Create a new job description with minimal required fields
-      const createData: CreateJobDescriptionRequest = {
-        title: data.title || 'Untitled Job',
-        company: data.company || 'Unknown Company',
-        description: data.description || '',
-        requirements: data.requirements,
-        preferredSkills: data.preferredSkills,
-        experienceLevel: data.experienceLevel,
-      };
-      return this.createJobDescription(createData);
+      return this.createJobDescription({ content });
     }
   }
 
@@ -129,8 +144,8 @@ class JobDescriptionService {
     };
   }
 
-  // Validate job description content
-  validateJobDescription(description: string): {
+  // Validate job description content locally
+  validateJobDescriptionLocal(description: string): {
     isValid: boolean;
     errors: string[];
     warnings: string[];
@@ -180,5 +195,6 @@ class JobDescriptionService {
     };
   }
 }
+
 
 export const jobDescriptionService = new JobDescriptionService();

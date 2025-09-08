@@ -6,15 +6,11 @@ interface UseJobDescriptionReturn {
   jobDescription: JobDescription | null;
   isLoading: boolean;
   error: string | null;
-  createJobDescription: (data: {
-    title: string;
-    company: string;
-    description: string;
-  }) => Promise<JobDescription | null>;
-  updateJobDescription: (id: string, data: Partial<JobDescription>) => Promise<JobDescription | null>;
+  createJobDescription: (content: string) => Promise<JobDescription | null>;
+  updateJobDescription: (id: string, content: string) => Promise<JobDescription | null>;
   loadJobDescription: (id: string) => Promise<void>;
   clearJobDescription: () => void;
-  autoSave: (data: Partial<JobDescription>) => Promise<JobDescription | null>;
+  autoSave: (content: string) => Promise<JobDescription | null>;
 }
 
 export const useJobDescription = (initialId?: string): UseJobDescriptionReturn => {
@@ -22,16 +18,12 @@ export const useJobDescription = (initialId?: string): UseJobDescriptionReturn =
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const createJobDescription = useCallback(async (data: {
-    title: string;
-    company: string;
-    description: string;
-  }) => {
+  const createJobDescription = useCallback(async (content: string) => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await jobDescriptionService.createJobDescription(data);
+      const response = await jobDescriptionService.createJobDescription({ content });
       if (response.success && response.data) {
         setJobDescription(response.data);
         return response.data;
@@ -47,12 +39,12 @@ export const useJobDescription = (initialId?: string): UseJobDescriptionReturn =
     }
   }, []);
 
-  const updateJobDescription = useCallback(async (id: string, data: Partial<JobDescription>) => {
+  const updateJobDescription = useCallback(async (id: string, content: string) => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const response = await jobDescriptionService.updateJobDescription({ id, ...data });
+      const response = await jobDescriptionService.updateJobDescription(id, { content });
       if (response.success && response.data) {
         setJobDescription(response.data);
         return response.data;
@@ -91,11 +83,11 @@ export const useJobDescription = (initialId?: string): UseJobDescriptionReturn =
     setError(null);
   }, []);
 
-  const autoSave = useCallback(async (data: Partial<JobDescription>) => {
+  const autoSave = useCallback(async (content: string) => {
     try {
       const response = await jobDescriptionService.autoSaveJobDescription(
         jobDescription?.id || null,
-        data
+        content
       );
       
       if (response.success && response.data) {

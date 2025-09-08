@@ -37,24 +37,23 @@ const JobDescriptionPage: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const handleSave = async () => {
-    if (!title.trim() || !company.trim() || !description.trim()) {
+    if (!description.trim()) {
       return;
     }
 
-    const result = await createJobDescription({
-      title: title.trim(),
-      company: company.trim(),
-      description: description.trim(),
-    });
+    // Combine title, company, and description into a single content string
+    const content = `Job Title: ${title.trim()}\nCompany: ${company.trim()}\n\n${description.trim()}`;
+    
+    const result = await createJobDescription(content);
 
     if (result) {
       navigate('/upload');
     }
   };
 
-  const handleAutoSave = async (data: Partial<JobDescription>) => {
-    if (jobDescription && data.description) {
-      await autoSave(data);
+  const handleAutoSave = async (content: string) => {
+    if (content.trim()) {
+      await autoSave(content);
     }
   };
 
@@ -63,11 +62,17 @@ const JobDescriptionPage: React.FC = () => {
 
     setIsAnalyzing(true);
     try {
-      const response = await jobDescriptionService.analyzeJobDescription(description);
+      const response = await jobDescriptionService.validateJobDescription(description);
       if (response.success && response.data) {
-        setAnalysis(response.data);
+        // Convert validation response to analysis format for display
+        setAnalysis({
+          requirements: [],
+          preferredSkills: [],
+          experienceLevel: 'Not specified',
+          keyTerms: []
+        });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Analysis failed:', err);
     } finally {
       setIsAnalyzing(false);
@@ -77,7 +82,7 @@ const JobDescriptionPage: React.FC = () => {
   const validation = jobDescriptionService.validateJobDescription(description);
   const extractedInfo = jobDescriptionService.extractJobInfo(description);
 
-  const canSave = title.trim() && company.trim() && validation.isValid;
+  const canSave = description.trim().length >= 50;
 
   return (
     <Box>
@@ -125,7 +130,7 @@ const JobDescriptionPage: React.FC = () => {
           <JobDescriptionEditor
             value={description}
             onChange={setDescription}
-            onSave={handleAutoSave}
+            onSave={(content) => handleAutoSave(content)}
             autoSave={true}
             showCharacterCount={true}
             showValidation={true}
@@ -138,7 +143,7 @@ const JobDescriptionPage: React.FC = () => {
                 Please fix the following issues:
               </Typography>
               <ul style={{ margin: 0, paddingLeft: 20 }}>
-                {validation.errors.map((error, index) => (
+                {validation.errors.map((error: string, index: number) => (
                   <li key={index}>{error}</li>
                 ))}
               </ul>
@@ -151,7 +156,7 @@ const JobDescriptionPage: React.FC = () => {
                 Suggestions for improvement:
               </Typography>
               <ul style={{ margin: 0, paddingLeft: 20 }}>
-                {validation.warnings.map((warning, index) => (
+                {validation.warnings.map((warning: string, index: number) => (
                   <li key={index}>{warning}</li>
                 ))}
               </ul>

@@ -5,6 +5,8 @@ import analysisRoutes from './analysis';
 import reportsRoutes from './reports';
 import websocketRoutes from './websocket';
 import monitoringRoutes from './monitoring';
+import feedbackRoutes from './feedback';
+import candidatesRoutes from './candidates';
 
 const router = Router();
 
@@ -15,6 +17,8 @@ router.use('/analysis', analysisRoutes);
 router.use('/reports', reportsRoutes);
 router.use('/websocket', websocketRoutes);
 router.use('/monitoring', monitoringRoutes);
+router.use('/feedback', feedbackRoutes);
+router.use('/candidates', candidatesRoutes);
 
 // API info endpoint
 router.get('/', (_req, res) => {
@@ -28,6 +32,8 @@ router.get('/', (_req, res) => {
       reports: '/api/v1/reports',
       websocket: '/api/v1/websocket',
       monitoring: '/api/v1/monitoring',
+      feedback: '/api/v1/feedback',
+      candidates: '/api/v1/candidates',
       health: '/health',
     },
     documentation: 'https://github.com/your-repo/resume-review-tool',

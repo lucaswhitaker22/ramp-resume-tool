@@ -103,10 +103,23 @@ export class ProgressTrackingService {
       progress.currentStep++;
       progress.status = 'processing';
       
-      // Update estimated completion time based on remaining steps
-      const remainingSteps = progress.steps.slice(progress.currentStep);
-      const remainingDuration = remainingSteps.reduce((sum, step) => sum + step.estimatedDuration, 0);
-      progress.estimatedCompletionTime = new Date(Date.now() + remainingDuration);
+      // Calculate more accurate estimated completion time based on actual elapsed time
+      const elapsedTime = Date.now() - progress.startTime.getTime();
+      const completedSteps = progress.currentStep;
+      const totalSteps = progress.steps.length;
+      
+      if (completedSteps > 0) {
+        // Use actual performance to adjust estimates
+        const averageStepTime = elapsedTime / completedSteps;
+        const remainingSteps = totalSteps - completedSteps;
+        const estimatedRemainingTime = remainingSteps * averageStepTime;
+        progress.estimatedCompletionTime = new Date(Date.now() + estimatedRemainingTime);
+      } else {
+        // Fallback to original estimation
+        const remainingSteps = progress.steps.slice(progress.currentStep);
+        const remainingDuration = remainingSteps.reduce((sum, step) => sum + step.estimatedDuration, 0);
+        progress.estimatedCompletionTime = new Date(Date.now() + remainingDuration);
+      }
 
       // Override step description if provided
       if (customDescription && progress.currentStep < progress.steps.length) {

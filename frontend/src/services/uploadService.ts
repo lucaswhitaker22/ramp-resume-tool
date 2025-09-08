@@ -45,7 +45,7 @@ class UploadService {
       formData.append('jobDescriptionId', jobDescriptionId);
 
       // Upload file with progress tracking
-      const response = await apiClient.post('/upload/resume', formData, {
+      const response = await apiClient.post('/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -59,12 +59,22 @@ class UploadService {
       });
 
       if (response.data.success) {
-        // Upload completed, now processing
+        // Upload completed, now start analysis
         callbacks.onStatusChange(fileName, 'processing');
         callbacks.onProgress(fileName, 100);
 
-        // Poll for processing completion
-        await this.pollProcessingStatus(fileName, response.data.data.candidateId, callbacks);
+        // Start analysis
+        const analysisResponse = await apiClient.post('/analysis', {
+          resumeId: response.data.data.resumeId,
+          jobDescriptionId: jobDescriptionId
+        });
+
+        if (analysisResponse.data.success) {
+          // Poll for analysis completion
+          await this.pollAnalysisStatus(fileName, analysisResponse.data.data.analysisId, callbacks);
+        } else {
+          throw new Error(analysisResponse.data.error || 'Analysis failed to start');
+        }
       } else {
         throw new Error(response.data.error || 'Upload failed');
       }
@@ -81,9 +91,9 @@ class UploadService {
     }
   }
 
-  private async pollProcessingStatus(
+  private async pollAnalysisStatus(
     fileName: string,
-    candidateId: string,
+    analysisId: string,
     callbacks: UploadServiceCallbacks
   ): Promise<void> {
     const maxAttempts = 30; // 5 minutes with 10-second intervals
@@ -91,18 +101,34 @@ class UploadService {
 
     const poll = async (): Promise<void> => {
       try {
-        const response = await apiClient.get(`/candidates/${candidateId}`);
+        const response = await apiClient.get(`/analysis/${analysisId}/status`);
         
         if (response.data.success) {
-          const candidate = response.data.data;
+          const analysis = response.data.data;
           
-          if (candidate.status === 'completed') {
-            callbacks.onStatusChange(fileName, 'completed');
-            callbacks.onComplete(fileName, candidate);
+          if (analysis.status === 'completed') {
+            // Get full analysis results
+            const fullResponse = await apiClient.get(`/analysis/${analysisId}`);
+            if (fullResponse.data.success) {
+              callbacks.onStatusChange(fileName, 'completed');
+              // Convert analysis result to candidate format for compatibility
+              const candidate = {
+                id: analysisId,
+                name: fileName.replace(/\.[^/.]+$/, ''), // Remove extension
+                status: 'completed',
+                overallScore: fullResponse.data.data.overallScore,
+                categoryScores: fullResponse.data.data.categoryScores,
+                recommendations: fullResponse.data.data.recommendations,
+                strengths: fullResponse.data.data.strengths,
+                improvementAreas: fullResponse.data.data.improvementAreas,
+                analyzedAt: fullResponse.data.data.analyzedAt
+              };
+              callbacks.onComplete(fileName, candidate);
+            }
             return;
-          } else if (candidate.status === 'error') {
+          } else if (analysis.status === 'failed' || analysis.status === 'error') {
             callbacks.onStatusChange(fileName, 'error');
-            callbacks.onError(fileName, 'Processing failed');
+            callbacks.onError(fileName, analysis.error || 'Analysis failed');
             return;
           }
         }
@@ -110,7 +136,7 @@ class UploadService {
         attempts++;
         if (attempts >= maxAttempts) {
           callbacks.onStatusChange(fileName, 'error');
-          callbacks.onError(fileName, 'Processing timeout');
+          callbacks.onError(fileName, 'Analysis timeout');
           return;
         }
 
@@ -118,7 +144,7 @@ class UploadService {
         setTimeout(poll, 10000); // Poll every 10 seconds
       } catch (error: any) {
         callbacks.onStatusChange(fileName, 'error');
-        callbacks.onError(fileName, error.message || 'Processing failed');
+        callbacks.onError(fileName, error.message || 'Analysis failed');
       }
     };
 

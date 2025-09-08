@@ -54,14 +54,25 @@ export interface ATSCompatibility {
 
 export interface JobDescription {
   id: string;
-  title: string;
-  company: string;
-  description: string;
-  requirements: string[];
-  preferredSkills: string[];
-  experienceLevel: string;
+  jobDescriptionId?: string; // For backward compatibility
+  title?: string;
+  company?: string;
+  content: string;
+  description?: string; // For backward compatibility
+  requirements?: string[];
+  preferredSkills?: string[];
+  experienceLevel?: string;
+  extractedRequirements?: {
+    requiredSkills: string[];
+    preferredSkills: string[];
+    experienceLevel: string;
+    education: string[];
+    certifications: string[];
+    keywords: string[];
+  };
+  contentLength?: number;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
 }
 
 export interface UploadProgress {

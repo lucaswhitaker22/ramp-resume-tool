@@ -1,5 +1,11 @@
 import dotenv from 'dotenv';
 import Joi from 'joi';
+import crypto from 'crypto';
+
+// Generate a secure secret (e.g., for dev; don't use in production)
+const jwtSecret = crypto.randomBytes(32).toString('base64');
+process.env['JWT_SECRET'] = jwtSecret;  // Or export it
+console.log('Generated JWT_SECRET:', jwtSecret);
 
 // Load environment variables
 dotenv.config();

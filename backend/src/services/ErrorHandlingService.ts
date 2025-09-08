@@ -380,6 +380,23 @@ export class ErrorHandlingService {
           operation: `${context.operation} (attempt ${attempt}/${config.maxAttempts})`,
         });
 
+        // Send retry notification if analysis-related
+        if (context.analysisId && attempt < config.maxAttempts && userFriendlyError.retryable) {
+          const delay = this.calculateRetryDelay(attempt, configName);
+          try {
+            const { notificationService } = await import('./NotificationService');
+            notificationService.sendRetryFeedback(
+              context.analysisId,
+              context.operation || 'operation',
+              attempt,
+              config.maxAttempts,
+              delay
+            );
+          } catch (notificationError) {
+            console.error('Failed to send retry notification:', notificationError);
+          }
+        }
+
         // Don't retry if not retryable or if this is the last attempt
         if (!userFriendlyError.retryable || attempt === config.maxAttempts) {
           throw error;
@@ -393,6 +410,26 @@ export class ErrorHandlingService {
     }
 
     throw lastError;
+  }
+
+  /**
+   * Create a retry wrapper for async functions
+   */
+  public createRetryWrapper<T extends any[], R>(
+    fn: (...args: T) => Promise<R>,
+    context: Partial<ErrorContext>,
+    configName: string = 'default'
+  ): (...args: T) => Promise<R> {
+    return async (...args: T): Promise<R> => {
+      return this.executeWithRetry(
+        () => fn(...args),
+        {
+          timestamp: new Date(),
+          ...context,
+        },
+        configName
+      );
+    };
   }
 
   /**

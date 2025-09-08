@@ -18,10 +18,10 @@ const router = Router();
  */
 router.get(
   '/:analysisId/pdf',
-  async (req: Request, _res: Response, next: NextFunction) => {
+  async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { analysisId } = req.params;
-      const { includeResume: _includeResume = 'false' } = req.query;
+      const { includeResume = 'false', template = 'standard' } = req.query;
 
       if (!analysisId) {
         throw createError('Analysis ID is required', 400);
@@ -37,8 +37,26 @@ router.get(
         throw createError('Analysis is not completed yet', 400);
       }
 
+      // Import the report generation service
+      const { CandidateReportService } = await import('@/services/CandidateReportService');
+      const reportService = new CandidateReportService();
+
       // Generate PDF report
-      throw createError('PDF generation not implemented', 501);
+      const pdfBuffer = await reportService.generatePDFReport(analysisResult, {
+        includeResumeContent: includeResume === 'true',
+        template: template as string,
+        includeCharts: true,
+        includeRecommendations: true,
+      });
+
+      // Set response headers for PDF download
+      const filename = `resume-analysis-${analysisResult.id}-${Date.now()}.pdf`;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', pdfBuffer.length);
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+      res.send(pdfBuffer);
     } catch (error) {
       next(error);
     }
@@ -331,7 +349,21 @@ router.get(
 
       if (format === 'pdf') {
         // Generate combined PDF report for all analyses
-        throw createError('Bulk PDF generation not implemented', 501);
+        const { CandidateReportService } = await import('@/services/CandidateReportService');
+        const reportService = new CandidateReportService();
+
+        const pdfBuffer = await reportService.generateBulkPDFReport(analyses, {
+          includeComparison: true,
+          includeCharts: true,
+        });
+
+        const filename = `resume-bulk-analysis-${resumeId}-${Date.now()}.pdf`;
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Length', pdfBuffer.length);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+        res.send(pdfBuffer);
       } else {
         // Return JSON summary of all analyses
         const summaries = analyses.map((analysis: any) => ({
@@ -356,6 +388,76 @@ router.get(
             exportedAt: new Date(),
           },
         });
+      }
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/v1/reports/download
+ * Download multiple reports as a ZIP file
+ */
+router.post(
+  '/download',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { analysisIds, format = 'pdf', includeResume = false } = req.body;
+
+      if (!analysisIds || !Array.isArray(analysisIds) || analysisIds.length === 0) {
+        throw createError('Analysis IDs array is required', 400);
+      }
+
+      if (analysisIds.length > 50) {
+        throw createError('Maximum 50 reports can be downloaded at once', 400);
+      }
+
+      // Fetch all analysis results
+      const analyses = await Promise.all(
+        analysisIds.map(async (id: string) => {
+          const analysis = await analysisResultModel.getAnalysisResult(id);
+          if (!analysis || analysis.status !== 'completed') {
+            throw createError(`Analysis ${id} not found or not completed`, 404);
+          }
+          return analysis;
+        })
+      );
+
+      if (format === 'pdf') {
+        // Generate ZIP file with PDF reports
+        const { CandidateReportService } = await import('@/services/CandidateReportService');
+        const reportService = new CandidateReportService();
+
+        const zipBuffer = await reportService.generateZipReports(analyses, {
+          format: 'pdf',
+          includeResumeContent: includeResume,
+        });
+
+        const filename = `resume-reports-${Date.now()}.zip`;
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Length', zipBuffer.length);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+        res.send(zipBuffer);
+      } else {
+        // Generate ZIP file with JSON reports
+        const { CandidateReportService } = await import('@/services/CandidateReportService');
+        const reportService = new CandidateReportService();
+
+        const zipBuffer = await reportService.generateZipReports(analyses, {
+          format: 'json',
+          includeResumeContent: includeResume,
+        });
+
+        const filename = `resume-reports-${Date.now()}.zip`;
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Content-Length', zipBuffer.length);
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+
+        res.send(zipBuffer);
       }
     } catch (error) {
       next(error);

@@ -199,6 +199,106 @@ router.delete(
 );
 
 /**
+ * GET /api/v1/job-description
+ * Get all job descriptions with pagination
+ */
+router.get(
+  '/',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const {
+        search,
+        page = 1,
+        limit = 20,
+        sortBy = 'created_at',
+        sortOrder = 'desc'
+      } = req.query;
+
+      let jobDescriptions = await jobDescriptionModel.findRecent(100); // Get more for filtering
+
+      // Apply search filter
+      if (search) {
+        const searchLower = (search as string).toLowerCase();
+        jobDescriptions = jobDescriptions.filter(jd => 
+          jd.content.toLowerCase().includes(searchLower)
+        );
+      }
+
+      // Sort
+      jobDescriptions.sort((a, b) => {
+        let aValue: any, bValue: any;
+        
+        switch (sortBy) {
+          case 'content':
+            aValue = a.content.length;
+            bValue = b.content.length;
+            break;
+          default:
+            aValue = new Date(a.created_at);
+            bValue = new Date(b.created_at);
+        }
+
+        if (sortOrder === 'asc') {
+          return aValue > bValue ? 1 : -1;
+        } else {
+          return aValue < bValue ? 1 : -1;
+        }
+      });
+
+      // Apply pagination
+      const pageNum = parseInt(page as string);
+      const limitNum = parseInt(limit as string);
+      const startIndex = (pageNum - 1) * limitNum;
+      const endIndex = startIndex + limitNum;
+      const paginatedJobDescriptions = jobDescriptions.slice(startIndex, endIndex);
+
+      // Add summary info
+      const jobDescriptionsWithSummary = paginatedJobDescriptions.map(jd => ({
+        id: jd.id,
+        title: jd.content.substring(0, 100) + (jd.content.length > 100 ? '...' : ''),
+        contentLength: jd.content.length,
+        wordCount: jd.content.trim().split(/\s+/).length,
+        hasRequirements: jd.extracted_requirements !== null,
+        createdAt: jd.created_at,
+      }));
+
+      res.json({
+        success: true,
+        data: {
+          data: jobDescriptionsWithSummary,
+          total: jobDescriptions.length,
+          page: pageNum,
+          limit: limitNum,
+          totalPages: Math.ceil(jobDescriptions.length / limitNum)
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/v1/job-description/stats
+ * Get job description statistics
+ */
+router.get(
+  '/stats',
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const stats = await jobDescriptionModel.getStatistics();
+
+      res.json({
+        success: true,
+        data: stats
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
  * POST /api/v1/job-description/validate
  * Validate job description content without saving
  */

@@ -12,11 +12,13 @@ import {
   DialogActions,
   TextField,
   Chip,
+  CircularProgress,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { Clear, Upload } from '@mui/icons-material';
 import FileUploadZone from '../components/FileUpload/FileUploadZone';
 import { useFileUpload } from '../hooks/useFileUpload';
+import { jobDescriptionService } from '../services/jobDescriptionService';
 
 const UploadPage: React.FC = () => {
   const navigate = useNavigate();
@@ -30,23 +32,45 @@ const UploadPage: React.FC = () => {
   } = useFileUpload();
 
   const [jobDescription, setJobDescription] = useState('');
+  const [jobDescriptionId, setJobDescriptionId] = useState<string | null>(null);
   const [showJobDescriptionDialog, setShowJobDescriptionDialog] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [isCreatingJobDescription, setIsCreatingJobDescription] = useState(false);
 
   const handleFilesSelected = (files: File[]) => {
-    if (!jobDescription.trim()) {
+    if (!jobDescription.trim() || !jobDescriptionId) {
       setPendingFiles(files);
       setShowJobDescriptionDialog(true);
     } else {
-      uploadFiles(files, 'default-job-id'); // TODO: Use actual job description ID
+      uploadFiles(files, jobDescriptionId);
     }
   };
 
-  const handleJobDescriptionSubmit = () => {
+  const handleJobDescriptionSubmit = async () => {
     if (jobDescription.trim() && pendingFiles.length > 0) {
-      setShowJobDescriptionDialog(false);
-      uploadFiles(pendingFiles, 'default-job-id'); // TODO: Use actual job description ID
-      setPendingFiles([]);
+      setIsCreatingJobDescription(true);
+      try {
+        // Create job description in backend
+        const response = await jobDescriptionService.createJobDescription({
+          content: jobDescription.trim()
+        });
+
+        if (response.success && response.data) {
+          const jdId = response.data.jobDescriptionId || response.data.id;
+          setJobDescriptionId(jdId);
+          setShowJobDescriptionDialog(false);
+          uploadFiles(pendingFiles, jdId);
+          setPendingFiles([]);
+        } else {
+          console.error('Failed to create job description:', response.error);
+          // TODO: Show error message to user
+        }
+      } catch (error) {
+        console.error('Error creating job description:', error);
+        // TODO: Show error message to user
+      } finally {
+        setIsCreatingJobDescription(false);
+      }
     }
   };
 
@@ -89,7 +113,10 @@ const UploadPage: React.FC = () => {
                 </Box>
                 <Button
                   startIcon={<Clear />}
-                  onClick={() => setJobDescription('')}
+                  onClick={() => {
+                    setJobDescription('');
+                    setJobDescriptionId(null);
+                  }}
                   size="small"
                 >
                   Change
@@ -207,13 +234,16 @@ const UploadPage: React.FC = () => {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCancelJobDescription}>Cancel</Button>
+          <Button onClick={handleCancelJobDescription} disabled={isCreatingJobDescription}>
+            Cancel
+          </Button>
           <Button
             onClick={handleJobDescriptionSubmit}
             variant="contained"
-            disabled={!jobDescription.trim()}
+            disabled={!jobDescription.trim() || isCreatingJobDescription}
+            startIcon={isCreatingJobDescription ? <CircularProgress size={16} /> : undefined}
           >
-            Start Upload
+            {isCreatingJobDescription ? 'Creating...' : 'Start Upload'}
           </Button>
         </DialogActions>
       </Dialog>

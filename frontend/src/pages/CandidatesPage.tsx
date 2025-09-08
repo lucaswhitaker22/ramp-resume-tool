@@ -14,6 +14,9 @@ import {
   ListItemIcon,
   ListItemText,
   Divider,
+  CircularProgress,
+  Alert,
+  Snackbar,
 } from '@mui/material';
 import {
   ViewModule,
@@ -24,149 +27,14 @@ import {
   Schedule,
   GetApp,
   MoreVert,
+  Refresh,
 } from '@mui/icons-material';
 import CandidateCard from '../components/Candidates/CandidateCard';
 import CandidateComparison from '../components/Candidates/CandidateComparison';
 import ScoringChart from '../components/Candidates/ScoringChart';
 import CandidateFiltersComponent, { CandidateFilters } from '../components/Candidates/CandidateFilters';
+import { useCandidates } from '../hooks/useCandidates';
 import { Candidate } from '../types';
-
-// Mock data for demonstration
-const mockCandidates: Candidate[] = [
-  {
-    id: '1',
-    name: 'John Smith',
-    email: 'john.smith@email.com',
-    phone: '+1-555-0123',
-    fileName: 'john_smith_resume.pdf',
-    uploadedAt: '2024-01-15T10:30:00Z',
-    status: 'completed',
-    overallScore: 85,
-    analysisResults: {
-      id: '1',
-      candidateId: '1',
-      jobDescriptionId: 'job1',
-      overallScore: 85,
-      skillsMatch: {
-        score: 90,
-        matchedSkills: ['React', 'TypeScript', 'Node.js', 'AWS'],
-        missingSkills: ['Docker', 'Kubernetes'],
-        additionalSkills: ['Python', 'MongoDB'],
-      },
-      experienceMatch: {
-        score: 80,
-        yearsOfExperience: 5,
-        relevantExperience: 4,
-        industryMatch: true,
-      },
-      educationMatch: {
-        score: 75,
-        degreeMatch: true,
-        fieldOfStudyMatch: true,
-        institutionPrestige: 8,
-      },
-      atsCompatibility: {
-        score: 88,
-        issues: ['Missing keywords in summary'],
-        suggestions: ['Add more technical keywords', 'Improve formatting'],
-      },
-      recommendations: [
-        'Strong technical skills match',
-        'Good industry experience',
-        'Consider for senior role',
-      ],
-      createdAt: '2024-01-15T10:35:00Z',
-    },
-  },
-  {
-    id: '2',
-    name: 'Sarah Johnson',
-    email: 'sarah.j@email.com',
-    fileName: 'sarah_johnson_cv.pdf',
-    uploadedAt: '2024-01-15T11:00:00Z',
-    status: 'completed',
-    overallScore: 78,
-    analysisResults: {
-      id: '2',
-      candidateId: '2',
-      jobDescriptionId: 'job1',
-      overallScore: 78,
-      skillsMatch: {
-        score: 75,
-        matchedSkills: ['JavaScript', 'React', 'CSS'],
-        missingSkills: ['TypeScript', 'Node.js', 'AWS'],
-        additionalSkills: ['Vue.js', 'Sass'],
-      },
-      experienceMatch: {
-        score: 85,
-        yearsOfExperience: 6,
-        relevantExperience: 5,
-        industryMatch: true,
-      },
-      educationMatch: {
-        score: 70,
-        degreeMatch: true,
-        fieldOfStudyMatch: false,
-        institutionPrestige: 6,
-      },
-      atsCompatibility: {
-        score: 82,
-        issues: ['Some formatting issues'],
-        suggestions: ['Improve section headers', 'Add more quantified achievements'],
-      },
-      recommendations: [
-        'Solid experience level',
-        'Good cultural fit potential',
-        'May need technical upskilling',
-      ],
-      createdAt: '2024-01-15T11:05:00Z',
-    },
-  },
-  {
-    id: '3',
-    name: 'Mike Chen',
-    email: 'mike.chen@email.com',
-    fileName: 'mike_chen_resume.pdf',
-    uploadedAt: '2024-01-15T12:00:00Z',
-    status: 'completed',
-    overallScore: 92,
-    analysisResults: {
-      id: '3',
-      candidateId: '3',
-      jobDescriptionId: 'job1',
-      overallScore: 92,
-      skillsMatch: {
-        score: 95,
-        matchedSkills: ['React', 'TypeScript', 'Node.js', 'AWS', 'Docker', 'Kubernetes'],
-        missingSkills: [],
-        additionalSkills: ['GraphQL', 'Redis', 'Elasticsearch'],
-      },
-      experienceMatch: {
-        score: 90,
-        yearsOfExperience: 8,
-        relevantExperience: 7,
-        industryMatch: true,
-      },
-      educationMatch: {
-        score: 85,
-        degreeMatch: true,
-        fieldOfStudyMatch: true,
-        institutionPrestige: 9,
-      },
-      atsCompatibility: {
-        score: 95,
-        issues: [],
-        suggestions: ['Excellent resume format'],
-      },
-      recommendations: [
-        'Exceptional technical skills',
-        'Strong leadership experience',
-        'Perfect fit for senior/lead role',
-      ],
-      createdAt: '2024-01-15T12:05:00Z',
-    },
-  },
-];
 
 const CandidatesPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -174,6 +42,11 @@ const CandidatesPage: React.FC = () => {
   const [comparisonOpen, setComparisonOpen] = useState(false);
   const [chartType, setChartType] = useState<'bar' | 'radar' | 'scatter'>('bar');
   const [bulkActionAnchor, setBulkActionAnchor] = useState<null | HTMLElement>(null);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
   
   const [filters, setFilters] = useState<CandidateFilters>({
     search: '',
@@ -185,15 +58,32 @@ const CandidatesPage: React.FC = () => {
     sortOrder: 'desc',
   });
 
-  // Filter and sort candidates
+  // Use the candidates hook
+  const {
+    candidates,
+    loading,
+    error,
+    total,
+    refetch,
+    updateFilters,
+    updateCandidateStatus,
+    bulkUpdateStatus,
+    deleteCandidate,
+    bulkDeleteCandidates,
+  } = useCandidates({
+    ...filters,
+    limit: 50, // Load more candidates for better UX
+  });
+
+  // Filter candidates locally for real-time filtering
   const filteredCandidates = useMemo(() => {
-    let filtered = mockCandidates.filter(candidate => {
+    return candidates.filter(candidate => {
       // Search filter
       if (filters.search) {
         const searchLower = filters.search.toLowerCase();
         const matchesSearch = 
           candidate.name.toLowerCase().includes(searchLower) ||
-          candidate.email?.toLowerCase().includes(searchLower) ||
+          candidate.fileName.toLowerCase().includes(searchLower) ||
           candidate.analysisResults?.skillsMatch.matchedSkills.some(skill => 
             skill.toLowerCase().includes(searchLower)
           );
@@ -225,46 +115,7 @@ const CandidatesPage: React.FC = () => {
 
       return true;
     });
-
-    // Sort candidates
-    filtered.sort((a, b) => {
-      let aValue: any, bValue: any;
-
-      switch (filters.sortBy) {
-        case 'name':
-          aValue = a.name;
-          bValue = b.name;
-          break;
-        case 'uploadedAt':
-          aValue = new Date(a.uploadedAt);
-          bValue = new Date(b.uploadedAt);
-          break;
-        case 'skillsScore':
-          aValue = a.analysisResults?.skillsMatch.score || 0;
-          bValue = b.analysisResults?.skillsMatch.score || 0;
-          break;
-        case 'experienceScore':
-          aValue = a.analysisResults?.experienceMatch.score || 0;
-          bValue = b.analysisResults?.experienceMatch.score || 0;
-          break;
-        case 'educationScore':
-          aValue = a.analysisResults?.educationMatch.score || 0;
-          bValue = b.analysisResults?.educationMatch.score || 0;
-          break;
-        default:
-          aValue = a.overallScore || 0;
-          bValue = b.overallScore || 0;
-      }
-
-      if (filters.sortOrder === 'asc') {
-        return aValue > bValue ? 1 : -1;
-      } else {
-        return aValue < bValue ? 1 : -1;
-      }
-    });
-
-    return filtered;
-  }, [filters]);
+  }, [candidates, filters]);
 
   const handleCandidateSelect = (candidate: Candidate) => {
     setSelectedCandidates(prev => 
@@ -274,22 +125,86 @@ const CandidatesPage: React.FC = () => {
     );
   };
 
-  const handleStatusChange = (candidateId: string, status: string) => {
-    // In a real app, this would make an API call
-    console.log(`Changing status of candidate ${candidateId} to ${status}`);
+  const handleStatusChange = async (candidateId: string, status: string) => {
+    try {
+      await updateCandidateStatus(candidateId, status);
+      setSnackbar({
+        open: true,
+        message: 'Candidate status updated successfully',
+        severity: 'success'
+      });
+    } catch (error: any) {
+      setSnackbar({
+        open: true,
+        message: error.message || 'Failed to update candidate status',
+        severity: 'error'
+      });
+    }
   };
 
   const handleCompare = () => {
     setComparisonOpen(true);
   };
 
-  const handleBulkAction = (action: string) => {
-    console.log(`Bulk action: ${action} for candidates:`, selectedCandidates);
-    setBulkActionAnchor(null);
-    setSelectedCandidates([]);
+  const handleBulkAction = async (action: string) => {
+    try {
+      switch (action) {
+        case 'shortlist':
+        case 'interview':
+        case 'reject':
+          await bulkUpdateStatus(selectedCandidates, action);
+          setSnackbar({
+            open: true,
+            message: `Successfully updated ${selectedCandidates.length} candidates`,
+            severity: 'success'
+          });
+          break;
+        case 'delete':
+          await bulkDeleteCandidates(selectedCandidates);
+          setSnackbar({
+            open: true,
+            message: `Successfully deleted ${selectedCandidates.length} candidates`,
+            severity: 'success'
+          });
+          break;
+        case 'export':
+          // Handle export - would need to implement export functionality
+          setSnackbar({
+            open: true,
+            message: 'Export functionality coming soon',
+            severity: 'success'
+          });
+          break;
+      }
+      setBulkActionAnchor(null);
+      setSelectedCandidates([]);
+    } catch (error: any) {
+      setSnackbar({
+        open: true,
+        message: error.message || 'Bulk action failed',
+        severity: 'error'
+      });
+    }
   };
 
-  const selectedCandidateObjects = mockCandidates.filter(c => selectedCandidates.includes(c.id));
+  const handleRefresh = async () => {
+    try {
+      await refetch();
+      setSnackbar({
+        open: true,
+        message: 'Candidates refreshed successfully',
+        severity: 'success'
+      });
+    } catch (error: any) {
+      setSnackbar({
+        open: true,
+        message: 'Failed to refresh candidates',
+        severity: 'error'
+      });
+    }
+  };
+
+  const selectedCandidateObjects = candidates.filter(c => selectedCandidates.includes(c.id));
 
   return (
     <Box>
@@ -301,9 +216,18 @@ const CandidatesPage: React.FC = () => {
           </Typography>
           <Typography variant="body1" color="text.secondary">
             Review and manage candidate applications with AI-powered analysis
+            {total > 0 && ` (${total} total candidates)`}
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant="outlined"
+            startIcon={<Refresh />}
+            onClick={handleRefresh}
+            disabled={loading}
+          >
+            Refresh
+          </Button>
           <Button
             variant={viewMode === 'grid' ? 'contained' : 'outlined'}
             startIcon={<ViewModule />}
@@ -321,6 +245,13 @@ const CandidatesPage: React.FC = () => {
         </Box>
       </Box>
 
+      {/* Error Alert */}
+      {error && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {error}
+        </Alert>
+      )}
+
       <Grid container spacing={3}>
         {/* Filters Sidebar */}
         <Grid item xs={12} md={3}>
@@ -328,7 +259,7 @@ const CandidatesPage: React.FC = () => {
             <CandidateFiltersComponent
               filters={filters}
               onFiltersChange={setFilters}
-              candidateCount={mockCandidates.length}
+              candidateCount={total}
               filteredCount={filteredCandidates.length}
             />
           </Paper>
@@ -382,46 +313,58 @@ const CandidatesPage: React.FC = () => {
             </Box>
           )}
 
-          {/* Candidates Grid/List */}
-          <Grid container spacing={2}>
-            {filteredCandidates.map((candidate) => (
-              <Grid 
-                item 
-                xs={12} 
-                sm={viewMode === 'grid' ? 6 : 12} 
-                lg={viewMode === 'grid' ? 4 : 12} 
-                key={candidate.id}
-              >
-                <Box sx={{ position: 'relative' }}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={selectedCandidates.includes(candidate.id)}
-                        onChange={() => handleCandidateSelect(candidate)}
-                      />
-                    }
-                    label=""
-                    sx={{ position: 'absolute', top: 8, left: 8, zIndex: 1 }}
-                  />
-                  <CandidateCard
-                    candidate={candidate}
-                    onSelect={handleCandidateSelect}
-                    onStatusChange={handleStatusChange}
-                    selected={selectedCandidates.includes(candidate.id)}
-                    compact={viewMode === 'list'}
-                  />
-                </Box>
-              </Grid>
-            ))}
-          </Grid>
+          {/* Loading State */}
+          {loading && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+              <CircularProgress />
+            </Box>
+          )}
 
-          {filteredCandidates.length === 0 && (
+          {/* Candidates Grid/List */}
+          {!loading && (
+            <Grid container spacing={2}>
+              {filteredCandidates.map((candidate) => (
+                <Grid 
+                  item 
+                  xs={12} 
+                  sm={viewMode === 'grid' ? 6 : 12} 
+                  lg={viewMode === 'grid' ? 4 : 12} 
+                  key={candidate.id}
+                >
+                  <Box sx={{ position: 'relative' }}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={selectedCandidates.includes(candidate.id)}
+                          onChange={() => handleCandidateSelect(candidate)}
+                        />
+                      }
+                      label=""
+                      sx={{ position: 'absolute', top: 8, left: 8, zIndex: 1 }}
+                    />
+                    <CandidateCard
+                      candidate={candidate}
+                      onSelect={handleCandidateSelect}
+                      onStatusChange={handleStatusChange}
+                      selected={selectedCandidates.includes(candidate.id)}
+                      compact={viewMode === 'list'}
+                    />
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+          )}
+
+          {!loading && filteredCandidates.length === 0 && !error && (
             <Box sx={{ textAlign: 'center', py: 8 }}>
               <Typography variant="h6" color="text.secondary" gutterBottom>
                 No candidates found
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Try adjusting your filters or upload more resumes
+                {total === 0 
+                  ? 'Upload some resumes to get started' 
+                  : 'Try adjusting your filters'
+                }
               </Typography>
             </Box>
           )}
@@ -466,6 +409,12 @@ const CandidatesPage: React.FC = () => {
           <ListItemText>Reject Selected</ListItemText>
         </MenuItem>
         <Divider />
+        <MenuItem onClick={() => handleBulkAction('delete')}>
+          <ListItemIcon>
+            <Cancel fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Delete Selected</ListItemText>
+        </MenuItem>
         <MenuItem onClick={() => handleBulkAction('export')}>
           <ListItemIcon>
             <GetApp fontSize="small" />
@@ -481,6 +430,21 @@ const CandidatesPage: React.FC = () => {
         onClose={() => setComparisonOpen(false)}
         onStatusChange={handleStatusChange}
       />
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+      >
+        <Alert 
+          onClose={() => setSnackbar(prev => ({ ...prev, open: false }))} 
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

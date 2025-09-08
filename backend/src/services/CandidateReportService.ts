@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import JSZip from 'jszip';
 import { ReportGenerationService, FeedbackReport } from './ReportGenerationService';
 import { RankedCandidate } from './CandidateRankingService';
 import { RecommendationResult } from './RecommendationEngineService';
@@ -66,6 +67,113 @@ export class CandidateReportService {
   async exportCandidateReportToPDF(report: CandidateReport): Promise<Buffer> {
     // Use the base report service for PDF generation
     return this.reportService.exportToPDF(report);
+  }
+
+  /**
+   * Generate PDF report for a single analysis result
+   */
+  async generatePDFReport(analysisResult: any, _options: {
+    includeResumeContent?: boolean;
+    template?: string;
+    includeCharts?: boolean;
+    includeRecommendations?: boolean;
+  }): Promise<Buffer> {
+    // Use the base report service for PDF generation
+    return this.reportService.exportToPDF(analysisResult);
+  }
+
+  /**
+   * Generate bulk PDF report for multiple analysis results
+   */
+  async generateBulkPDFReport(analyses: any[], _options: {
+    includeComparison?: boolean;
+    includeCharts?: boolean;
+  }): Promise<Buffer> {
+    // Create a combined PDF for multiple analyses
+    return new Promise((resolve, reject) => {
+      try {
+        const doc = new PDFDocument({
+          size: 'A4',
+          margins: { top: 50, bottom: 50, left: 50, right: 50 }
+        });
+
+        const buffers: Buffer[] = [];
+        doc.on('data', buffers.push.bind(buffers));
+        doc.on('end', () => {
+          const pdfBuffer = Buffer.concat(buffers);
+          resolve(pdfBuffer);
+        });
+
+        // Title page
+        doc.font('Helvetica-Bold')
+           .fontSize(24)
+           .text('Bulk Candidate Analysis Report', 50, 50);
+
+        doc.font('Helvetica')
+           .fontSize(14)
+           .text(`Total Candidates: ${analyses.length}`, 50, 100)
+           .text(`Generated: ${new Date().toLocaleDateString()}`, 50, 120);
+
+        // Add each analysis
+        analyses.forEach((analysis, index) => {
+          if (index > 0) doc.addPage();
+          
+          doc.font('Helvetica-Bold')
+             .fontSize(18)
+             .text(`Candidate ${index + 1}: ${analysis.fileName || 'Unknown'}`, 50, 50);
+
+          doc.font('Helvetica')
+             .fontSize(12)
+             .text(`Overall Score: ${analysis.overallScore || 'N/A'}`, 50, 80)
+             .text(`Analysis Date: ${analysis.createdAt ? new Date(analysis.createdAt).toLocaleDateString() : 'N/A'}`, 50, 100);
+        });
+
+        doc.end();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * Generate ZIP file containing multiple reports
+   */
+  async generateZipReports(analyses: any[], options: {
+    format?: 'pdf' | 'json';
+    includeResumeContent?: boolean;
+  }): Promise<Buffer> {
+    const zip = new JSZip();
+
+    try {
+      for (let i = 0; i < analyses.length; i++) {
+        const analysis = analyses[i];
+        const fileName = analysis.fileName || `candidate_${i + 1}`;
+        
+        if (options.format === 'pdf') {
+          // Generate individual PDF for each analysis
+          const pdfBuffer = await this.generatePDFReport(analysis, {
+            includeResumeContent: options.includeResumeContent || false,
+            includeCharts: true,
+            includeRecommendations: true
+          });
+          zip.file(`${fileName}_report.pdf`, pdfBuffer);
+        } else {
+          // Generate JSON report
+          const jsonReport = {
+            fileName: analysis.fileName,
+            overallScore: analysis.overallScore,
+            categoryScores: analysis.categoryScores,
+            createdAt: analysis.createdAt,
+            ...(options.includeResumeContent && { resumeContent: analysis.resumeContent })
+          };
+          zip.file(`${fileName}_report.json`, JSON.stringify(jsonReport, null, 2));
+        }
+      }
+
+      return await zip.generateAsync({ type: 'nodebuffer' });
+    } catch (error) {
+      throw new Error(`Failed to generate ZIP reports: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   /**

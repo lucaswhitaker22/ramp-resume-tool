@@ -14,18 +14,39 @@ export class ResumeModel extends BaseModel<ResumeEntity> {
     filename: string;
     fileSize: number;
     contentText?: string;
+    candidateName?: string;
     status?: ResumeEntity['status'];
   }): Promise<string> {
     const resumeData: Omit<ResumeEntity, 'id'> = {
       filename: data.filename,
       file_size: data.fileSize,
       content_text: data.contentText || null,
+      candidate_name: data.candidateName || this.extractNameFromFilename(data.filename),
       uploaded_at: new Date().toISOString(),
       processed_at: null,
       status: data.status || 'uploaded' as const,
     };
 
     return await this.create(resumeData);
+  }
+
+  /**
+   * Extract candidate name from filename
+   */
+  private extractNameFromFilename(filename: string): string {
+    const baseName = filename.replace(/\.[^/.]+$/, ''); // Remove extension
+    
+    // Try to extract name patterns (e.g., "John_Doe_Resume.pdf" -> "John Doe")
+    const nameMatch = baseName.match(/^([A-Za-z]+[_\s-]+[A-Za-z]+)/);
+    if (nameMatch && nameMatch[1]) {
+      return nameMatch[1].replace(/[_-]/g, ' ').trim();
+    }
+
+    // Fallback to filename without extension and common resume words
+    return baseName
+      .replace(/[_-]/g, ' ')
+      .replace(/\b(resume|cv|curriculum|vitae)\b/gi, '')
+      .trim() || 'Unknown Candidate';
   }
 
   /**

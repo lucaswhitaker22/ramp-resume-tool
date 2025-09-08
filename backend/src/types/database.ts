@@ -5,6 +5,7 @@ export interface ResumeEntity {
   filename: string;
   file_size: number;
   content_text: string | null;
+  candidate_name: string;
   uploaded_at: string;
   processed_at: string | null;
   status: 'uploaded' | 'processing' | 'completed' | 'failed';
