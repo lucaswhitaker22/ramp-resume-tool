@@ -2,9 +2,9 @@
 
 ## Overview
 
-The Resume Review Tool is a web-based application that provides automated resume analysis and feedback. The system uses natural language processing and machine learning techniques to analyze resume content against job descriptions and industry best practices, delivering actionable recommendations to improve job application success rates.
+The Resume Review Tool is a web-based application that provides automated resume analysis and candidate evaluation for employers and hiring managers. The system uses natural language processing and machine learning techniques to analyze candidate resumes against job descriptions and hiring criteria, delivering comprehensive scoring, ranking, and insights to streamline the recruitment process.
 
-The application follows a modern web architecture with a React frontend, Node.js backend, and cloud-based document processing services. The design emphasizes user experience, data security, and scalable performance to handle concurrent users during peak periods.
+The application follows a modern web architecture with a React frontend, Node.js backend, and cloud-based document processing services. The design emphasizes hiring efficiency, candidate privacy, and scalable performance to handle high-volume recruitment scenarios.
 
 ## Architecture
 
@@ -17,17 +17,20 @@ graph TB
     C --> D[Node.js Backend]
     D --> E[Document Processing Service]
     D --> F[NLP Analysis Engine]
-    D --> G[Feedback Generator]
+    D --> G[Candidate Evaluation Engine]
     D --> H[File Storage]
     D --> I[Database]
+    D --> J[Candidate Management System]
     
-    E --> J[PDF Parser]
-    E --> K[Text Extractor]
-    F --> L[Job Description Analyzer]
-    F --> M[Resume Content Analyzer]
-    F --> N[Keyword Matcher]
-    G --> O[Scoring Engine]
-    G --> P[Recommendation Engine]
+    E --> K[PDF Parser]
+    E --> L[Text Extractor]
+    F --> M[Job Description Analyzer]
+    F --> N[Resume Content Analyzer]
+    F --> O[Keyword Matcher]
+    G --> P[Scoring Engine]
+    G --> Q[Ranking Engine]
+    J --> R[Candidate Tracking]
+    J --> S[Team Collaboration]
 ```
 
 ### Technology Stack
