@@ -256,6 +256,7 @@ router.get(
       const jobDescriptionsWithSummary = paginatedJobDescriptions.map(jd => ({
         id: jd.id,
         title: jd.content.substring(0, 100) + (jd.content.length > 100 ? '...' : ''),
+        content: jd.content,
         contentLength: jd.content.length,
         wordCount: jd.content.trim().split(/\s+/).length,
         hasRequirements: jd.extracted_requirements !== null,
@@ -358,6 +359,53 @@ router.post(
             hasResponsibilities,
           },
         },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/v1/job-description/analyze
+ * Analyze job description content without saving
+ */
+router.post(
+  '/analyze',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { content } = req.body;
+
+      if (!content || typeof content !== 'string') {
+        throw createError('Job description content is required', 400);
+      }
+
+      if (content.length > 10000) {
+        throw createError('Job description content exceeds maximum length of 10,000 characters', 400);
+      }
+
+      if (content.trim().length < 50) {
+        throw createError('Job description content is too short (minimum 50 characters)', 400);
+      }
+
+      // Analyze the job description without saving
+      const analysisResult = await jobDescriptionAnalysisService.analyzeJobDescription(content);
+
+      res.json({
+        success: true,
+        data: {
+          extractedRequirements: {
+            requiredSkills: analysisResult.requiredSkills,
+            preferredSkills: analysisResult.preferredSkills,
+            experienceLevel: analysisResult.experienceLevel,
+            education: analysisResult.education,
+            certifications: analysisResult.certifications,
+            keywords: analysisResult.keywords,
+          },
+          contentLength: content.length,
+          analysisTimestamp: new Date(),
+        },
+        message: 'Job description analyzed successfully',
       });
     } catch (error) {
       next(error);

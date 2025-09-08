@@ -14,6 +14,12 @@ import {
   ListItemIcon,
   ListItemText,
   Divider,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Button as MuiButton,
   CircularProgress,
   Alert,
   Snackbar,
@@ -42,6 +48,8 @@ const CandidatesPage: React.FC = () => {
   const [comparisonOpen, setComparisonOpen] = useState(false);
   const [chartType, setChartType] = useState<'bar' | 'radar' | 'scatter'>('bar');
   const [bulkActionAnchor, setBulkActionAnchor] = useState<null | HTMLElement>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [candidateToDelete, setCandidateToDelete] = useState<Candidate | null>(null);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
     open: false,
     message: '',
@@ -204,6 +212,37 @@ const CandidatesPage: React.FC = () => {
     }
   };
 
+  const handleDeleteCandidate = (candidate: Candidate) => {
+    setCandidateToDelete(candidate);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!candidateToDelete) return;
+
+    try {
+      await deleteCandidate(candidateToDelete.id);
+      setSnackbar({
+        open: true,
+        message: 'Candidate deleted successfully',
+        severity: 'success'
+      });
+      setDeleteDialogOpen(false);
+      setCandidateToDelete(null);
+    } catch (error: any) {
+      setSnackbar({
+        open: true,
+        message: error.message || 'Failed to delete candidate',
+        severity: 'error'
+      });
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setCandidateToDelete(null);
+  };
+
   const selectedCandidateObjects = candidates.filter(c => selectedCandidates.includes(c.id));
 
   return (
@@ -346,6 +385,7 @@ const CandidatesPage: React.FC = () => {
                       candidate={candidate}
                       onSelect={handleCandidateSelect}
                       onStatusChange={handleStatusChange}
+                      onDelete={handleDeleteCandidate}
                       selected={selectedCandidates.includes(candidate.id)}
                       compact={viewMode === 'list'}
                     />
@@ -422,6 +462,31 @@ const CandidatesPage: React.FC = () => {
           <ListItemText>Export Data</ListItemText>
         </MenuItem>
       </Menu>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+        aria-labelledby="delete-candidate-dialog-title"
+        aria-describedby="delete-candidate-dialog-description"
+      >
+        <DialogTitle id="delete-candidate-dialog-title">
+          Delete Candidate?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="delete-candidate-dialog-description">
+            Are you sure you want to delete "{candidateToDelete?.name}"? This action cannot be undone and will permanently remove their resume and analysis data.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <MuiButton onClick={handleDeleteCancel} color="inherit">
+            Cancel
+          </MuiButton>
+          <MuiButton onClick={handleDeleteConfirm} color="error" variant="contained">
+            Delete Candidate
+          </MuiButton>
+        </DialogActions>
+      </Dialog>
 
       {/* Comparison Dialog */}
       <CandidateComparison

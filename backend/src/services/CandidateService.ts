@@ -1,7 +1,7 @@
-import { resumeModel, analysisResultModel } from '@/models';
-import { ResumeContentAnalysisService } from './ResumeContentAnalysisService';
+import { resumeModel, analysisResultModel, jobDescriptionModel } from '@/models';
 import { ScoringEngineService } from './ScoringEngineService';
 import { RecommendationEngineService } from './RecommendationEngineService';
+import { ResumeParsingService } from './ResumeParsingService';
 import { createError } from '@/middleware/errorHandler';
 import { CategoryScores, Recommendation } from '@/types/database';
 
@@ -14,14 +14,14 @@ export interface CandidateAnalysisOptions {
  * Service for managing candidate lifecycle and analysis
  */
 export class CandidateService {
-  private resumeAnalysisService: ResumeContentAnalysisService;
   private scoringService: ScoringEngineService;
   private recommendationService: RecommendationEngineService;
+  private resumeParsingService: ResumeParsingService;
 
   constructor() {
-    this.resumeAnalysisService = new ResumeContentAnalysisService();
     this.scoringService = new ScoringEngineService();
     this.recommendationService = new RecommendationEngineService();
+    this.resumeParsingService = new ResumeParsingService();
   }
 
   /**
@@ -106,77 +106,71 @@ export class CandidateService {
   }
 
   /**
-   * Perform the actual analysis
-   */
-  private async performAnalysis(
-    analysisId: string,
-    resumeContent: string,
-    jobDescriptionId?: string
-  ): Promise<void> {
-    try {
-      // Update status to processing
-      await analysisResultModel.updateStatus(analysisId, 'processing');
+    * Perform the actual analysis
+    */
+   private async performAnalysis(
+     analysisId: string,
+     resumeContent: string,
+     jobDescriptionId?: string
+   ): Promise<void> {
+     try {
+       // Update status to processing
+       await analysisResultModel.updateStatus(analysisId, 'processing');
 
-      // For now, create a simplified analysis with placeholder scores
-      // This will be enhanced when the full analysis services are properly integrated
-      
-      const categoryScores: CategoryScores = {
-        content: Math.floor(Math.random() * 30) + 70, // 70-100
-        structure: Math.floor(Math.random() * 30) + 70,
-        keywords: Math.floor(Math.random() * 30) + 60, // 60-90
-        experience: Math.floor(Math.random() * 30) + 65, // 65-95
-        skills: Math.floor(Math.random() * 30) + 70,
-      };
+       // Parse resume content
+       const { content: parsedResume, sections } = this.resumeParsingService.parseResumeWithSections(resumeContent);
 
-      const overallScore = Math.round(
-        (categoryScores.content + categoryScores.structure + categoryScores.keywords + 
-         categoryScores.experience + categoryScores.skills) / 5
-      );
+       // Get job requirements if provided
+       let jobRequirements = undefined;
+       let jobDescription = undefined;
+       if (jobDescriptionId) {
+         const jobDetails = await jobDescriptionModel.getWithRequirements(jobDescriptionId);
+         if (jobDetails) {
+           jobRequirements = jobDetails.requirements;
+           jobDescription = jobDetails.jobDescription.content;
+         }
+       }
 
-      // Generate basic recommendations
-      const recommendations: Recommendation[] = [
-        {
-          id: `rec-${Date.now()}-1`,
-          category: 'content',
-          priority: 'medium',
-          title: 'Enhance resume content',
-          description: 'Consider adding more specific achievements and quantifiable results',
-          impact: 'This will help demonstrate your value to potential employers',
-        },
-        {
-          id: `rec-${Date.now()}-2`,
-          category: 'keywords',
-          priority: 'high',
-          title: 'Optimize keywords',
-          description: 'Include more relevant industry keywords and technical skills',
-          impact: 'Improves ATS compatibility and recruiter visibility',
-        }
-      ];
+       // Calculate overall scores using scoring service
+       const scoringResult = await this.scoringService.calculateOverallScore(
+         parsedResume,
+         sections,
+         jobRequirements,
+         jobDescription
+       );
 
-      // Extract strengths and improvement areas
-      const strengths = this.extractStrengths(null, categoryScores);
-      const improvementAreas = this.extractImprovementAreas(categoryScores, recommendations);
+       // Generate recommendations
+       const recommendationResult = await this.recommendationService.generateRecommendations(
+         parsedResume,
+         sections,
+         scoringResult.categoryScores,
+         jobRequirements
+       );
 
-      // Update analysis results
-      await analysisResultModel.updateResults(analysisId, {
-        overallScore,
-        categoryScores,
-        recommendations,
-        strengths,
-        improvementAreas,
-      });
+       // Extract strengths and improvement areas using analysis results
+       const strengths = this.extractStrengths(parsedResume, scoringResult.categoryScores);
+       const improvementAreas = this.extractImprovementAreas(scoringResult.categoryScores, recommendationResult.recommendations);
 
-      console.log(`✅ Analysis completed for analysis ID: ${analysisId}`);
-    } catch (error) {
-      console.error('Analysis failed:', error);
-      await analysisResultModel.updateStatus(
-        analysisId, 
-        'failed', 
-        error instanceof Error ? error.message : 'Unknown error'
-      );
-      throw error;
-    }
-  }
+       // Update analysis results
+       await analysisResultModel.updateResults(analysisId, {
+         overallScore: scoringResult.overallScore,
+         categoryScores: scoringResult.categoryScores,
+         recommendations: recommendationResult.recommendations,
+         strengths,
+         improvementAreas,
+       });
+
+       console.log(`✅ Analysis completed for analysis ID: ${analysisId}`);
+     } catch (error) {
+       console.error('Analysis failed:', error);
+       await analysisResultModel.updateStatus(
+         analysisId,
+         'failed',
+         error instanceof Error ? error.message : 'Unknown error'
+       );
+       throw error;
+     }
+   }
 
   /**
    * Re-analyze a candidate with optional new job description
@@ -217,40 +211,40 @@ export class CandidateService {
   }
 
   /**
-   * Extract strengths from analysis
-   */
-  private extractStrengths(resumeAnalysis: any, categoryScores: CategoryScores): string[] {
-    const strengths: string[] = [];
+    * Extract strengths from analysis
+    */
+   private extractStrengths(parsedResume: any, categoryScores: CategoryScores): string[] {
+     const strengths: string[] = [];
 
-    if (categoryScores.content >= 80) {
-      strengths.push('Strong resume content and presentation');
-    }
-    if (categoryScores.structure >= 80) {
-      strengths.push('Well-structured and organized resume');
-    }
-    if (categoryScores.keywords >= 80) {
-      strengths.push('Good keyword optimization');
-    }
-    if (categoryScores.experience >= 80) {
-      strengths.push('Relevant work experience');
-    }
-    if (categoryScores.skills >= 80) {
-      strengths.push('Strong skill set alignment');
-    }
+     if (categoryScores.content >= 80) {
+       strengths.push('Strong resume content and presentation');
+     }
+     if (categoryScores.structure >= 80) {
+       strengths.push('Well-structured and organized resume');
+     }
+     if (categoryScores.keywords >= 80) {
+       strengths.push('Good keyword optimization');
+     }
+     if (categoryScores.experience >= 80) {
+       strengths.push('Relevant work experience');
+     }
+     if (categoryScores.skills >= 80) {
+       strengths.push('Strong skill set alignment');
+     }
 
-    // Add specific strengths from resume analysis if available
-    if (resumeAnalysis?.achievements?.length > 0) {
-      strengths.push('Quantifiable achievements highlighted');
-    }
-    if (resumeAnalysis?.skills?.length >= 10) {
-      strengths.push('Comprehensive skill set');
-    }
-    if (resumeAnalysis?.experience?.length >= 3) {
-      strengths.push('Diverse work experience');
-    }
+     // Add specific strengths from parsed resume if available
+     if (parsedResume?.sections?.experience?.some((exp: any) => exp.achievements?.length > 0)) {
+       strengths.push('Quantifiable achievements highlighted');
+     }
+     if (parsedResume?.sections?.skills?.length >= 10) {
+       strengths.push('Comprehensive skill set');
+     }
+     if (parsedResume?.sections?.experience?.length >= 3) {
+       strengths.push('Diverse work experience');
+     }
 
-    return strengths.length > 0 ? strengths : ['Resume uploaded and processed successfully'];
-  }
+     return strengths.length > 0 ? strengths : ['Resume uploaded and processed successfully'];
+   }
 
   /**
    * Extract improvement areas from scores and recommendations

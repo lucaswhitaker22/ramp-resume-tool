@@ -194,6 +194,32 @@ class JobDescriptionService {
       suggestions,
     };
   }
+
+  // Analyze job description without saving
+  async analyzeJobDescriptionContent(content: string): Promise<ApiResponse<{
+    extractedRequirements: {
+      requiredSkills: string[];
+      preferredSkills: string[];
+      experienceLevel: string;
+      education: string[];
+      certifications: string[];
+      keywords: string[];
+    };
+    contentLength: number;
+    analysisTimestamp: string;
+  }>> {
+    return apiRequest.post('/job-description/analyze', { content });
+  }
+
+  // Add missing validateJobDescription - alias for local validation
+  async validateJobDescription(content: string): Promise<{
+    isValid: boolean;
+    errors: string[];
+    warnings: string[];
+    suggestions: string[];
+  }> {
+    return this.validateJobDescriptionLocal(content);
+  }
 }
 
 

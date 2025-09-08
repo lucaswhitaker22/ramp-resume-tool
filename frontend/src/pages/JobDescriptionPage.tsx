@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import {
   Typography,
   Box,
@@ -23,8 +24,10 @@ import { JobDescription } from '../types';
 
 const JobDescriptionPage: React.FC = () => {
   const navigate = useNavigate();
-  const { jobDescription, isLoading, error, createJobDescription, autoSave } = useJobDescription();
-  
+  const { id: jobId } = useParams<{ id: string }>();
+  const isEditMode = !!jobId;
+  const { jobDescription, isLoading, error, createJobDescription, updateJobDescription, loadJobDescription, autoSave } = useJobDescription(jobId);
+
   const [title, setTitle] = useState('');
   const [company, setCompany] = useState('');
   const [description, setDescription] = useState('');
@@ -36,6 +39,22 @@ const JobDescriptionPage: React.FC = () => {
   } | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
+  // Load existing job description data when in edit mode
+  useEffect(() => {
+    if (isEditMode && jobDescription) {
+      // Extract title and company from content if present
+      const content = jobDescription.content || '';
+      const titleMatch = content.match(/Job Title:\s*(.+?)\n/i);
+      const companyMatch = content.match(/Company:\s*(.+?)\n/i);
+
+      if (titleMatch) setTitle(titleMatch[1].trim());
+      if (companyMatch) setCompany(companyMatch[1].trim());
+
+      // Remove the header parts from description
+      setDescription(content.replace(/Job Title:.*?\n/i, '').replace(/Company:.*?\n/i, '').trim());
+    }
+  }, [isEditMode, jobDescription]);
+
   const handleSave = async () => {
     if (!description.trim()) {
       return;
@@ -43,17 +62,27 @@ const JobDescriptionPage: React.FC = () => {
 
     // Combine title, company, and description into a single content string
     const content = `Job Title: ${title.trim()}\nCompany: ${company.trim()}\n\n${description.trim()}`;
-    
-    const result = await createJobDescription(content);
+
+    console.log('JobDescriptionPage: Saving job description...', { isEditMode, jobId });
+
+    let result;
+    if (isEditMode && jobId) {
+      result = await updateJobDescription(jobId, content);
+      console.log('JobDescriptionPage: Update result:', result);
+    } else {
+      result = await createJobDescription(content);
+      console.log('JobDescriptionPage: Create result:', result);
+    }
 
     if (result) {
       navigate('/upload');
     }
   };
 
-  const handleAutoSave = async (content: string) => {
-    if (content.trim()) {
-      await autoSave(content);
+  const handleAutoSave = async (jobDescriptionData: Partial<JobDescription>) => {
+    const contentToSave = jobDescriptionData.description || jobDescriptionData.content || '';
+    if (contentToSave.trim()) {
+      await autoSave(contentToSave);
     }
   };
 
@@ -62,14 +91,18 @@ const JobDescriptionPage: React.FC = () => {
 
     setIsAnalyzing(true);
     try {
-      const response = await jobDescriptionService.validateJobDescription(description);
+      // Combine title, company, and description for backend
+      const combinedContent = `Job Title: ${title.trim()}\nCompany: ${company.trim()}\n\n${description.trim()}`;
+
+      const response = await jobDescriptionService.analyzeJobDescriptionContent(combinedContent);
+
       if (response.success && response.data) {
-        // Convert validation response to analysis format for display
+        const extracted = response.data.extractedRequirements;
         setAnalysis({
-          requirements: [],
-          preferredSkills: [],
-          experienceLevel: 'Not specified',
-          keyTerms: []
+          requirements: extracted.requiredSkills,
+          preferredSkills: extracted.preferredSkills,
+          experienceLevel: extracted.experienceLevel,
+          keyTerms: extracted.keywords.slice(0, 10) // Limit to first 10 keywords
         });
       }
     } catch (err: any) {
@@ -79,7 +112,7 @@ const JobDescriptionPage: React.FC = () => {
     }
   };
 
-  const validation = jobDescriptionService.validateJobDescription(description);
+  const validation = jobDescriptionService.validateJobDescriptionLocal(description);
   const extractedInfo = jobDescriptionService.extractJobInfo(description);
 
   const canSave = description.trim().length >= 50;
@@ -88,10 +121,13 @@ const JobDescriptionPage: React.FC = () => {
     <Box>
       <Box sx={{ mb: 4 }}>
         <Typography variant="h3" component="h1" gutterBottom>
-          Job Description
+          {isEditMode ? 'Edit Job Description' : 'Job Description'}
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Create a detailed job description to analyze candidate resumes against your specific requirements.
+          {isEditMode
+            ? 'Update your job description and requirements.'
+            : 'Create a detailed job description to analyze candidate resumes against your specific requirements.'
+          }
         </Typography>
       </Box>
 
@@ -179,7 +215,7 @@ const JobDescriptionPage: React.FC = () => {
               onClick={handleSave}
               disabled={!canSave || isLoading}
             >
-              Save & Continue
+              {isEditMode ? 'Update & Continue' : 'Save & Continue'}
             </Button>
           </Box>
         </Grid>

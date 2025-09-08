@@ -11,6 +11,7 @@ import {
   MenuItem,
   Avatar,
   Tooltip,
+  Divider,
 } from '@mui/material';
 import {
   MoreVert,
@@ -23,6 +24,7 @@ import {
   CheckCircle,
   Cancel,
   Schedule,
+  Delete,
 } from '@mui/icons-material';
 import { Candidate } from '../../types';
 
@@ -30,6 +32,7 @@ interface CandidateCardProps {
   candidate: Candidate;
   onSelect?: (candidate: Candidate) => void;
   onStatusChange?: (candidateId: string, status: string) => void;
+  onDelete?: (candidate: Candidate) => void;
   onCompare?: (candidate: Candidate) => void;
   selected?: boolean;
   compact?: boolean;
@@ -39,6 +42,7 @@ const CandidateCard: React.FC<CandidateCardProps> = ({
   candidate,
   onSelect,
   onStatusChange,
+  onDelete,
   onCompare,
   selected = false,
   compact = false,
@@ -255,6 +259,15 @@ const CandidateCard: React.FC<CandidateCardProps> = ({
           <Cancel fontSize="small" sx={{ mr: 1 }} />
           Reject
         </MenuItem>
+        {onDelete && (
+          <Divider sx={{ my: 0.5 }} />
+        )}
+        {onDelete && (
+          <MenuItem onClick={() => onDelete(candidate)} sx={{ color: 'error.main' }}>
+            <Delete fontSize="small" sx={{ mr: 1 }} />
+            Delete
+          </MenuItem>
+        )}
         {onCompare && (
           <MenuItem onClick={() => onCompare(candidate)}>
             <Star fontSize="small" sx={{ mr: 1 }} />
